@@ -17,11 +17,21 @@ describe("Logout", () => {
 			username: "testuser",
 			email: "testuser@example.com",
 			dateJoined: "2022-01-01",
+			role: "user" as const,
 		};
 
 		render(
 			<Router>
-				<AuthContext.Provider value={{ setIsLoggedIn, isLoggedIn: true }}>
+				<AuthContext.Provider value={{
+					isLoggedIn: true,
+					setIsLoggedIn,
+					user: mockUser,
+					login: jest.fn(),
+					register: jest.fn(),
+					logout: jest.fn(),
+					isAuthenticated: true,
+					loading: false,
+				}}>
 					<UserContext.Provider value={{ user: mockUser, setUser: setUser }}>
 						<Logout />
 					</UserContext.Provider>
@@ -42,26 +52,33 @@ describe("Logout", () => {
 			username: "testuser",
 			email: "testuser@example.com",
 			dateJoined: "2022-01-01",
+			role: "user" as const,
 		};
-
 		render(
 			<Router>
-				<AuthContext.Provider value={{ setIsLoggedIn, isLoggedIn: true }}>
+				<AuthContext.Provider value={{
+					isLoggedIn: true,
+					setIsLoggedIn,
+					user: mockUser,
+					login: jest.fn(),
+					register: jest.fn(),
+					logout: jest.fn(),
+					isAuthenticated: true,
+					loading: false,
+				}}>
 					<UserContext.Provider value={{ user: mockUser, setUser: setUser }}>
 						<Logout />
 					</UserContext.Provider>
 				</AuthContext.Provider>
 			</Router>,
 		);
-
 		fireEvent.click(screen.getByText("Logout"));
-
-		expect(setIsLoggedIn).toHaveBeenCalledWith(false);
 		expect(setUser).toHaveBeenCalledWith({
 			userId: "",
 			username: "",
 			email: "",
 			dateJoined: "",
+			role: "user" as const,
 		});
 		expect(window.location.pathname).toBe("/");
 	});

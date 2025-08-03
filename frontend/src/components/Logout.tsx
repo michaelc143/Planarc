@@ -18,6 +18,7 @@ export default function Logout(): React.JSX.Element {
 			username: "",
 			email: "",
 			dateJoined: "",
+			role: "user",
 		});
 		navigate("/");
 	};

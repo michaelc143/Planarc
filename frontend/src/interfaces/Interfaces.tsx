@@ -7,7 +7,7 @@ export type User = {
 }
 
 export type LoginCredentials = {
-  email: string;
+  username: string;
   password: string;
 }
 
@@ -15,7 +15,6 @@ export type RegisterData = {
   username: string;
   email: string;
   password: string;
-  confirmPassword: string;
 }
 
 export type AuthResponse = {
@@ -31,6 +30,8 @@ export type AuthContextType = {
   logout: () => void;
   isAuthenticated: boolean;
   loading: boolean;
+  isLoggedIn: boolean;
+  setIsLoggedIn: (loggedIn: boolean) => void;
 }
 
 export type Project = {

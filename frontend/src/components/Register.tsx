@@ -5,50 +5,37 @@ import { Link, useNavigate } from "react-router-dom";
 import { AuthContext } from "../contexts/AuthContext";
 import { ToastContext } from "../contexts/ToastContext";
 import { UserContext } from "../contexts/UserContext";
-import { AuthResponse } from "../interfaces/APIResponseInterfaces";
-import { User } from "../interfaces/Interfaces";
 
 export default function Register(): React.JSX.Element {
 	const [username, setUsername] = useState<string>("");
 	const [email, setEmail] = useState<string>("");
 	const [password, setPassword] = useState<string>("");
-	const { setIsLoggedIn } = useContext(AuthContext);
 	const { showToast } = useContext(ToastContext);
 	const { setUser } = useContext(UserContext);
+	const { register } = useContext(AuthContext);
 	const navigate = useNavigate();
 
 	const handleSubmit = async (event: React.FormEvent) => {
 		event.preventDefault();
-    
+	
 		if (!username || !email || !password) {
 			showToast("Please fill out all fields.", "error");
 			return;
 		}
 		try {
-			const response = await fetch("http://localhost:5000/api/register", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					username,
-					email,
-					password,
-				}),
-			});
-
-			const data: AuthResponse = await response.json();
-
-			if (response.ok) {
-				setIsLoggedIn(true);
-				setUser({
-					username: data.username,
-					email: data.email,
-					dateJoined: data.date_joined,
-				} as User);
+			const success = await register({ username, email, password });
+			if (success) {
+				const userStr = localStorage.getItem("user");
+				if (userStr) {
+					try {
+						setUser(JSON.parse(userStr));
+					} catch {
+						showToast("Error parsing user data", "error");
+					}
+				}
 				showToast("Registered successfully!", "success");
-				navigate("/userinfo");
-			} 
+				navigate("/dashboard");
+			}
 			else {
 				showToast("Failed to register", "error");
 			}
@@ -81,16 +68,16 @@ export default function Register(): React.JSX.Element {
 					</div>
 					<div>
 						<button type="submit" className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-500 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-              Register
+							Register
 						</button>
 					</div>
 				</form>
 				<div className="mt-6 flex justify-between">
 					<Link to="/" className="text-blue-500 hover:text-blue-500">
-            Back to Home
+			Back to Home
 					</Link>
 					<Link to="/login" className="text-blue-500 hover:text-blue-500">
-            Login
+			Login
 					</Link>
 				</div>
 			</div>

@@ -10,9 +10,25 @@ describe("Dashboard", () => {
 	test("renders Dashboard when logged in", () => {
 		const setIsLoggedIn = jest.fn();
 
+		const mockUser = {
+			userId: "1",
+			username: "testuser",
+			email: "testuser@example.com",
+			dateJoined: "2022-01-01",
+			role: "user" as const,
+		};
 		render(
 			<Router>
-				<AuthContext.Provider value={{ isLoggedIn: true, setIsLoggedIn: setIsLoggedIn }}>
+				<AuthContext.Provider value={{
+					isLoggedIn: true,
+					setIsLoggedIn,
+					user: mockUser,
+					login: jest.fn(),
+					register: jest.fn(),
+					logout: jest.fn(),
+					isAuthenticated: true,
+					loading: false,
+				}}>
 					<Dashboard />
 				</AuthContext.Provider>
 			</Router>,
@@ -24,10 +40,26 @@ describe("Dashboard", () => {
 
 	test("redirects to home page when not logged in", () => {
 		const setIsLoggedIn = jest.fn();
+		const mockUser = {
+			userId: "1",
+			username: "testuser",
+			email: "testuser@example.com",
+			dateJoined: "2022-01-01",
+			role: "user" as const,
+		};
 
 		render(
 			<Router>
-				<AuthContext.Provider value={{ isLoggedIn: false, setIsLoggedIn: setIsLoggedIn }}>
+				<AuthContext.Provider value={{
+					isLoggedIn: false,
+					setIsLoggedIn,
+					user: mockUser,
+					login: jest.fn(),
+					register: jest.fn(),
+					logout: jest.fn(),
+					isAuthenticated: false,
+					loading: false,
+				}}>
 					<Dashboard />
 				</AuthContext.Provider>
 			</Router>,

@@ -26,11 +26,21 @@ describe("DeleteAccount", () => {
 			username: "testuser",
 			email: "testuser@example.com",
 			dateJoined: "2022-01-01",
+			role: "user",
 		};
 
 		render(
 			<Router>
-				<AuthContext.Provider value={{ isLoggedIn: true, setIsLoggedIn }}>
+				<AuthContext.Provider value={{
+					isLoggedIn: true,
+					setIsLoggedIn,
+					user: mockUser,
+					login: jest.fn(),
+					register: jest.fn(),
+					logout: jest.fn(),
+					isAuthenticated: true,
+					loading: false,
+				}}>
 					<UserContext.Provider value={{ user: mockUser, setUser: setUser }}>
 						<ToastContext.Provider value={{ showToast }}>
 							<DeleteAccount />
@@ -53,6 +63,7 @@ describe("DeleteAccount", () => {
 			username: "",
 			email: "",
 			dateJoined: "",
+			role: "user",
 		});
 		expect(showToast).toHaveBeenCalledWith("User deleted successfully", "success");
 
@@ -63,16 +74,26 @@ describe("DeleteAccount", () => {
 		const setIsLoggedIn = jest.fn();
 		const setUser = jest.fn();
 
-		const mockUser = {
+		const mockUser: User = {
 			userId: "1",
 			username: "testuser",
 			email: "testuser@example.com",
 			dateJoined: "2022-01-01",
+			role: "user",
 		};
 
 		render(
 			<Router>
-				<AuthContext.Provider value={{ isLoggedIn: false, setIsLoggedIn }}>
+				<AuthContext.Provider value={{
+					isLoggedIn: false,
+					setIsLoggedIn,
+					user: mockUser,
+					login: jest.fn(),
+					register: jest.fn(),
+					logout: jest.fn(),
+					isAuthenticated: false,
+					loading: false,
+				}}>
 					<UserContext.Provider value={{ user: mockUser, setUser: setUser}}>
 						<ToastContext.Provider value={{ showToast: jest.fn() }}>
 							<DeleteAccount />

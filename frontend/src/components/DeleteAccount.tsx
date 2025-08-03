@@ -29,6 +29,7 @@ export default function DeleteAccount(): React.JSX.Element {
 					username: "",
 					email: "",
 					dateJoined: "",
+					role: "user",
 				});
 				showToast("User deleted successfully", "success");
 				navigate("/");

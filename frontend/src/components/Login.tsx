@@ -4,47 +4,34 @@ import { Link, useNavigate } from "react-router-dom";
 import { AuthContext } from "../contexts/AuthContext";
 import { ToastContext } from "../contexts/ToastContext";
 import { UserContext } from "../contexts/UserContext";
-import { User } from "../interfaces/Interfaces";
-import { AuthResponse } from "../interfaces/APIResponseInterfaces";
 
 export default function Login(): React.JSX.Element {
 	const [username, setUsername] = useState<string>("");
 	const [password, setPassword] = useState<string>("");
-	const { setIsLoggedIn } = useContext(AuthContext);
-	const { setUser } = useContext(UserContext);
+	const { login } = useContext(AuthContext);
 	const { showToast } = useContext(ToastContext);
-
+	const { setUser } = useContext(UserContext);
 	const navigate = useNavigate();
 
 	const handleSubmit = async (event: React.FormEvent) => {
 		event.preventDefault();
 		try {
-			const response = await fetch("http://localhost:5000/api/login", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({ username, password }),
-			});
-
-			const data: AuthResponse = await response.json();
-
-			if (response.ok) {
-				setIsLoggedIn(true);
-				setUser({
-					userId: data.user_id,
-					username: data.username,
-					email: data.email,
-					dateJoined: data.date_joined,
-				} as User);
+			const success = await login({ username: username, password: password });
+			if (success) {
+				const userStr = localStorage.getItem("user");
+				if (userStr) {
+					try {
+						setUser(JSON.parse(userStr));
+					} catch {
+						showToast("Error parsing user data", "error");
+					}
+				}
 				showToast("Logged in successfully!", "success");
-				navigate("/dashboard"); //todo: change to dashboard
-			}
-			else {
+				navigate("/dashboard");
+			} else {
 				showToast("Error logging in", "error");
 			}
-		} 
-		catch (error) {
+		} catch (error) {
 			showToast("Error connecting to db", "error");
 		}
 	};
@@ -73,16 +60,16 @@ export default function Login(): React.JSX.Element {
 
 					<div>
 						<button type="submit" className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-500 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-              Login
+								Login
 						</button>
 					</div>
 				</form>
 				<div className="mt-6 flex justify-between">
 					<Link to="/" className="text-blue-500 hover:text-blue-700">
-            Back to Home
+			Back to Home
 					</Link>
 					<Link to="/register" className="text-blue-500 hover:text-blue-700">
-            Register
+			Register
 					</Link>
 				</div>
 			</div>

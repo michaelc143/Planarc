@@ -7,6 +7,7 @@ import { AuthContext } from "../../contexts/AuthContext";
 import { ToastContext } from "../../contexts/ToastContext";
 import { UserContext } from "../../contexts/UserContext";
 import Login from "../Login";
+import authService from "../../services/auth-service";
 
 describe("Login", () => {
 
@@ -19,11 +20,35 @@ describe("Login", () => {
 			username: "testuser",
 			email: "testuser@example.com",
 			dateJoined: "2022-01-01",
+			role: "user" as const,
 		};
 
 		render(
 			<Router>
-				<AuthContext.Provider value={{ isLoggedIn: false, setIsLoggedIn }}>
+				<AuthContext.Provider value={{
+					isLoggedIn: false,
+					setIsLoggedIn,
+					user: mockUser,
+					login: async (credentials) => {
+						try {
+							await authService.login(credentials);
+							return true;
+						} catch {
+							return false;
+						}
+					},
+					register: async (data) => {
+						try {
+							await authService.register(data);
+							return true;
+						} catch {
+							return false;
+						}
+					},
+					logout: jest.fn(),
+					isAuthenticated: false,
+					loading: false,
+				}}>
 					<UserContext.Provider value={{ user: mockUser, setUser: setUser }}>
 						<ToastContext.Provider value={{ showToast: jest.fn() }}>
 							<Login />
@@ -46,11 +71,35 @@ describe("Login", () => {
 			username: "testuser",
 			email: "testuser@example.com",
 			dateJoined: "2022-01-01",
+			role: "user" as const,
 		};
 
 		render(
 			<Router>
-				<AuthContext.Provider value={{ isLoggedIn: false, setIsLoggedIn }}>
+				<AuthContext.Provider value={{
+					isLoggedIn: false,
+					setIsLoggedIn,
+					user: mockUser,
+					login: async (credentials) => {
+						try {
+							await authService.login(credentials);
+							return true;
+						} catch {
+							return false;
+						}
+					},
+					register: async (data) => {
+						try {
+							await authService.register(data);
+							return true;
+						} catch {
+							return false;
+						}
+					},
+					logout: jest.fn(),
+					isAuthenticated: false,
+					loading: false,
+				}}>
 					<UserContext.Provider value={{ user: mockUser, setUser: setUser }}>
 						<ToastContext.Provider value={{ showToast: jest.fn() }}>
 							<Login />
@@ -86,11 +135,35 @@ describe("Login", () => {
 			username: "testuser",
 			email: "testuser@example.com",
 			dateJoined: "2022-01-01",
+			role: "user" as const,
 		};
 
 		render(
 			<Router>
-				<AuthContext.Provider value={{ isLoggedIn: false, setIsLoggedIn }}>
+				<AuthContext.Provider value={{
+					isLoggedIn: false,
+					setIsLoggedIn,
+					user: mockUser,
+					login: async (credentials) => {
+						try {
+							await authService.login(credentials);
+							return true;
+						} catch {
+							return false;
+						}
+					},
+					register: async (data) => {
+						try {
+							await authService.register(data);
+							return true;
+						} catch {
+							return false;
+						}
+					},
+					logout: jest.fn(),
+					isAuthenticated: false,
+					loading: false,
+				}}>
 					<UserContext.Provider value={{ user: mockUser, setUser: setUser }}>
 						<ToastContext.Provider value={{ showToast: jest.fn() }}>
 							<Login />
@@ -110,7 +183,7 @@ describe("Login", () => {
 
 		await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
 
-		expect(global.fetch).toHaveBeenCalledWith("http://localhost:5000/api/login",
+		expect(global.fetch).toHaveBeenCalledWith("http://localhost:5000/api/auth/login",
 			{"body": "{\"username\":\"testuser\",\"password\":\"testpassword\"}", "headers": {"Content-Type": "application/json"}, "method": "POST"});
 
 		expect(usernameInput.value).toBe("testuser");

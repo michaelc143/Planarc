@@ -3,14 +3,12 @@ import { useContext } from "react";
 import { Navigate } from "react-router-dom";
 
 import { AuthContext } from "../../contexts/AuthContext";
-import { UserContext } from "../../contexts/UserContext";
 import DashboardList from "./DashboardList";
 import DashboardMainPane from "./DashboardMainPane";
 
 export default function Dashboard(): React.JSX.Element {
 
 	const { isLoggedIn } = useContext(AuthContext);
-	const { user } = useContext(UserContext);
 
 	if (!isLoggedIn) {
 		return <Navigate to="/" />;

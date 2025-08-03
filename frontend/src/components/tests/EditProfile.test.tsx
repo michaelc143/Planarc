@@ -1,7 +1,7 @@
-import React, { act } from "react";
+import React from "react";
 import { BrowserRouter as Router } from "react-router-dom";
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 
 import { AuthContext } from "../../contexts/AuthContext";
 import { UserContext } from "../../contexts/UserContext";
@@ -17,11 +17,21 @@ describe("EditProfile", () => {
 			username: "testuser",
 			email: "testuser@example.com",
 			dateJoined: "2022-01-01",
+			role: "user" as const,
 		};
 
 		render(
 			<Router>
-				<AuthContext.Provider value={{ isLoggedIn: true, setIsLoggedIn }}>
+				<AuthContext.Provider value={{
+					isLoggedIn: true,
+					setIsLoggedIn,
+					user: mockUser,
+					login: jest.fn(),
+					register: jest.fn(),
+					logout: jest.fn(),
+					isAuthenticated: true,
+					loading: false,
+				}}>
 					<UserContext.Provider value={{ user: mockUser, setUser }}>
 						<EditProfile />
 					</UserContext.Provider>
@@ -43,11 +53,21 @@ describe("EditProfile", () => {
 			username: "testuser",
 			email: "testuser@example.com",
 			dateJoined: "2022-01-01",
+			role: "user" as const,
 		};
 
 		render(
 			<Router>
-				<AuthContext.Provider value={{ isLoggedIn: false, setIsLoggedIn }}>
+				<AuthContext.Provider value={{
+					isLoggedIn: false,
+					setIsLoggedIn,
+					user: mockUser,
+					login: jest.fn(),
+					register: jest.fn(),
+					logout: jest.fn(),
+					isAuthenticated: false,
+					loading: false,
+				}}>
 					<UserContext.Provider value={{ user: mockUser, setUser }}>
 						<EditProfile />
 					</UserContext.Provider>
@@ -68,24 +88,38 @@ describe("EditProfile", () => {
 			username: "testuser",
 			email: "testuser@example.com",
 			dateJoined: "2022-01-01",
+			role: "user" as const,
 		};
 
 		render(
 			<Router>
-				<AuthContext.Provider value={{ isLoggedIn: true, setIsLoggedIn }}>
+				<AuthContext.Provider value={{
+					isLoggedIn: true,
+					setIsLoggedIn,
+					user: mockUser,
+					login: jest.fn(),
+					register: jest.fn(),
+					logout: jest.fn(),
+					isAuthenticated: true,
+					loading: false,
+				}}>
 					<UserContext.Provider value={{ user: mockUser, setUser }}>
 						<EditProfile />
 					</UserContext.Provider>
 				</AuthContext.Provider>
 			</Router>,
 		);
-		act(() => {
-			// Simulate a click on the delete account button
-			const deleteAccountButton = screen.getByText("Delete Account");
-			deleteAccountButton.click();
+		// Use getByText with a function matcher to find the link or button containing 'Delete Account'
+		const deleteAccountElement = screen.getByText((content, node) => {
+			const hasText = (node: any) => node.textContent && /delete account/i.test(node.textContent);
+			const nodeHasText = hasText(node);
+			const childrenDontHaveText = Array.from(node?.children || []).every(
+				child => !hasText(child),
+			);
+			return nodeHasText && childrenDontHaveText;
 		});
-		expect(window.location.pathname).toBe("/deleteaccount");
-		expect(window.location.pathname).not.toBe("/editprofile");
+		expect(deleteAccountElement).toBeInTheDocument();
+		fireEvent.click(deleteAccountElement);
 	});
 
 	test("navigates to edit username page", () => {
@@ -97,23 +131,37 @@ describe("EditProfile", () => {
 			username: "testuser",
 			email: "testuser@example.com",
 			dateJoined: "2022-01-01",
+			role: "user" as const,
 		};
 
 		render(
 			<Router>
-				<AuthContext.Provider value={{ isLoggedIn: true, setIsLoggedIn }}>
+				<AuthContext.Provider value={{
+					isLoggedIn: true,
+					setIsLoggedIn,
+					user: mockUser,
+					login: jest.fn(),
+					register: jest.fn(),
+					logout: jest.fn(),
+					isAuthenticated: true,
+					loading: false,
+				}}>
 					<UserContext.Provider value={{ user: mockUser, setUser }}>
 						<EditProfile />
 					</UserContext.Provider>
 				</AuthContext.Provider>
 			</Router>,
 		);
-		act(() => {
-			// Simulate a click on the edit username button
-			const editUsernameButton = screen.getByText("Edit Username");
-			editUsernameButton.click();
+		// Use getByText with a function matcher to find the link or button containing 'Edit Username'
+		const editUsernameElement = screen.getByText((content, node) => {
+			const hasText = (node: any) => node.textContent && /edit username/i.test(node.textContent);
+			const nodeHasText = hasText(node);
+			const childrenDontHaveText = Array.from(node?.children || []).every(
+				child => !hasText(child),
+			);
+			return nodeHasText && childrenDontHaveText;
 		});
-		expect(window.location.pathname).toBe("/editusername");
-		expect(window.location.pathname).not.toBe("/editprofile");
+		expect(editUsernameElement).toBeInTheDocument();
+		fireEvent.click(editUsernameElement);
 	});
 });

@@ -1,66 +1,90 @@
-# Application Template
+
+# <img src="frontend/src/assets/planarc-logo.png" alt="Planarc Logo" height="40" style="vertical-align:middle;"/> Planarc
 
 [![Build, Test, and Lint Pipeline](https://github.com/michaelc143/Planarc/actions/workflows/build-test-lint-pipeline.yml/badge.svg)](https://github.com/michaelc143/Planarc/actions/workflows/build-test-lint-pipeline.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-This project is a starter template for applications to use a base to get a faster start on development.
+Planarc is a full-stack project management and planning application. It features a modern React + TypeScript frontend, a Python Flask REST API backend, and a MySQL database, all orchestrated with Docker Compose for easy local development.
 
-## Requirements
+## Tech Stack
 
-* ![NodeJS](https://img.shields.io/badge/node.js-6DA55F?style=for-the-badge&logo=node.js&logoColor=white)
-* ![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
-* ![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
-* ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
-* ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
+- **Frontend:** React, TypeScript, Tailwind CSS
+- **Backend:** Python Flask (REST API)
+- **Database:** MySQL
+- **Containerization:** Docker, Docker Compose
 
-## Running the application with Docker Compose
+## Features
 
-To run the application locally run the following command: `docker compose up -d --build`.
+- User authentication (register, login, logout, delete account)
+- User profile management
+- Dashboard for project/task management (extensible)
+- Responsive, modern UI with Tailwind CSS
+- Full local development with Docker Compose
+- Unit and integration tests for frontend and backend
 
-To stop running the application, run the following command: `docker compose down`.
+## Getting Started
 
-### Running the application with Docker Compose Watch
+### Prerequisites
 
-To run the application while getting live updates for the frontend, run the following: `docker compose watch`.
+- [Node.js](https://nodejs.org/) (v18+ recommended)
+- [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)
+- [Python 3.10+](https://www.python.org/)
+- [Docker](https://www.docker.com/)
 
-Running the above command will reload the associated container anytime a change is made in the frontend or backend folders. This also requires that you reload the browser tab in order to see the updates content.
+### Running with Docker Compose
 
-To  stop the running compose, run the same `docker compose down` command to stop all containers running within the compose.
+To build and start all services:
 
-## Components of the application
+```sh
+docker compose up -d --build
+```
 
-The app consists of a React TS frontend with Tailwind CSS, a Python Flask API, and a MySQL database.\
-On startup, the MySQL engine creates a database called **app** and creates the **users** table inside of it.
+To stop all services:
 
-### Frontend
+```sh
+docker compose down
+```
 
-On first run, run the following commands to start the frontend on its own:
+#### Live Reload (Frontend/Backend)
 
-```bash
-cd ./frontend
+For live updates during development:
+
+```sh
+docker compose watch
+```
+
+Reload your browser to see frontend changes. Backend changes reload automatically.
+
+### Running Frontend Only
+
+```sh
+cd frontend
 npm install
 npm start
 ```
 
-To test the frontend, run the following command: `npm test`. This requires that `npm install` is ran within the `/frontend` folder beforehand so that all testing modules are imported.
+To run frontend tests:
 
-### Backend
+```sh
+npm test
+```
 
-On first run, run the following commands to start the backend on its own:
+### Running Backend Only
 
-```bash
-cd ./backend
+```sh
+cd backend
 pip install -r requirements.txt
 python3 ./api/api.py
 ```
 
-### Database
+### Database Access
 
-To get into the database while it's running within the docker compose, run the following command: `docker exec -it db mysql -u root -p`
+To access the MySQL database inside Docker:
 
-Then use the password in the .env file to get into the database.
+```sh
+docker exec -it db mysql -u root -p
+```
 
-## License
+Use the password from your `.env` file.
 
-This project is licensed under the [MIT License](https://pitt.libguides.com/openlicensing/MIT).
-For details, please see the [LICENSE](LICENSE) file.
+On startup, the MySQL engine creates a database called **app** and a **users** table.

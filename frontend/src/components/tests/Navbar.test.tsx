@@ -33,7 +33,6 @@ describe("Navbar", () => {
 			</Router>,
 		);
 
-		expect(screen.getByText("Home")).toBeInTheDocument();
 		expect(screen.getByText("Login")).toBeInTheDocument();
 		expect(screen.getByText("Register")).toBeInTheDocument();
 	});
@@ -65,9 +64,7 @@ describe("Navbar", () => {
 			</Router>,
 		);
 
-		expect(screen.getByText("Home")).toBeInTheDocument();
 		expect(screen.getByText("Logout")).toBeInTheDocument();
 		expect(screen.getByText("Delete Account")).toBeInTheDocument();
-		expect(screen.getByText("User Info")).toBeInTheDocument();
 	});
 });

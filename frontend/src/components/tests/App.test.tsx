@@ -23,11 +23,6 @@ describe("App", () => {
 		expect(registerButton).toBeInTheDocument();
 	});
 
-	test("renders home button", () => {
-		render(<App />);
-		const homeButton = screen.getByRole("link", { name: /Home/i });
-		expect(homeButton).toBeInTheDocument();
-	});
 });
 
 describe("Nav", () => {

@@ -1,0 +1,33 @@
+{
+  "env": {
+    "browser": true,
+    "es2021": true
+  },
+  "extends": [
+    "eslint:recommended",
+    "plugin:react/recommended",
+    "plugin:@typescript-eslint/recommended"
+  ],
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaFeatures": {
+      "jsx": true
+    },
+    "ecmaVersion": 12,
+    "sourceType": "module"
+  },
+  "plugins": ["react", "@typescript-eslint"],
+  "rules": {
+    "semi": ["error", "always"], // Enforce semicolons
+    "curly": ["error", "all"], // Enforce curly braces for all control statements
+    "no-irregular-whitespace": "error", // Disallow irregular whitespace outside of strings and comments
+    "no-unused-vars": "warn", // Warn on unused variables
+    "no-console": "warn", // Warn on console statements
+    "default-case": "warn", // Enforce default case in switch statements
+    "quotes": ["error", "double"], // Enforce double quotes
+    "indent": ["error", "tab"], // Enforce tab indentation
+    "comma-dangle": ["error", "always-multiline"], // Enforce trailing commas in multiline objects and arrays
+    "arrow-spacing": ["error", { "before": true, "after": true }], // Enforce spacing around arrow function arrows
+    "prefer-const": "warn" // Suggest using const for variables that are never reassigned
+  }
+}

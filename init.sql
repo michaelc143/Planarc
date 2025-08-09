@@ -84,3 +84,6 @@ CREATE TABLE IF NOT EXISTS board_tasks (
     FOREIGN KEY (created_by) REFERENCES users(id),
     INDEX idx_board_column (board_id, status, position)
 );
+
+-- Optional index for ordering queries by status/position
+CREATE INDEX IF NOT EXISTS idx_board_tasks_board_status_position ON board_tasks (board_id, status, position);

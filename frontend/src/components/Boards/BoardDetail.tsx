@@ -3,6 +3,7 @@ import { useParams, Navigate } from "react-router-dom";
 import { BoardTask, Board } from "../../interfaces/Interfaces";
 import boardService from "../../services/board-service";
 import { AuthContext } from "../../contexts/AuthContext";
+import BoardKanban from "./BoardKanban";
 
 export default function BoardDetail(): React.JSX.Element {
 	const { isLoggedIn } = useContext(AuthContext);
@@ -66,7 +67,7 @@ export default function BoardDetail(): React.JSX.Element {
 	}
 
 	return (
-		<div className="p-4 max-w-3xl mx-auto">
+		<div className="p-4 max-w-6xl mx-auto">
 			<h1 className="text-2xl font-bold mb-4">{board?.name}</h1>
 			<p className="text-gray-700 mb-6">{board?.description}</p>
 
@@ -94,14 +95,7 @@ export default function BoardDetail(): React.JSX.Element {
 				<button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded sm:col-span-2">Add Task</button>
 			</form>
 
-			<ul className="space-y-2">
-				{tasks.map((t) => (
-					<li key={t.id} className="border rounded p-3">
-						<div className="font-medium">{t.title} <span className="text-xs text-gray-500">[{t.priority}]</span></div>
-						<div className="text-sm text-gray-600">{t.description}</div>
-					</li>
-				))}
-			</ul>
+			<BoardKanban boardId={id} tasks={tasks} setTasks={setTasks} />
 		</div>
 	);
 }

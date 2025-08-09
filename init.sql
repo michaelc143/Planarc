@@ -76,9 +76,11 @@ CREATE TABLE IF NOT EXISTS board_tasks (
     assigned_to INT,
     created_by INT,
     due_date DATE,
+    position INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE,
     FOREIGN KEY (assigned_to) REFERENCES users(id),
-    FOREIGN KEY (created_by) REFERENCES users(id)
+    FOREIGN KEY (created_by) REFERENCES users(id),
+    INDEX idx_board_column (board_id, status, position)
 );

@@ -25,12 +25,15 @@ export type AuthResponse = {
 
 export type AuthContextType = {
   user: User | null;
+  // eslint-disable-next-line no-unused-vars
   login: (credentials: LoginCredentials) => Promise<boolean>;
+  // eslint-disable-next-line no-unused-vars
   register: (data: RegisterData) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
   loading: boolean;
   isLoggedIn: boolean;
+  // eslint-disable-next-line no-unused-vars
   setIsLoggedIn: (loggedIn: boolean) => void;
 }
 
@@ -80,6 +83,7 @@ export type BoardTask = {
   assigned_to?: number;
   created_by: number;
   due_date?: string;
+  position?: number;
   created_at: string;
   updated_at?: string;
 }

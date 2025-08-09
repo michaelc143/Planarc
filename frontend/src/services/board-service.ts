@@ -101,6 +101,17 @@ class BoardService {
 			throw new Error((await res.json()).message || "Failed to delete task");
 		}
 	}
+
+	async reorderTasks(boardId: number, moves: Array<{ task_id: number; to_status: BoardTask["status"]; to_position: number }>): Promise<void> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/tasks/reorder`, {
+			method: "POST",
+			headers: this.authHeaders(),
+			body: JSON.stringify({ moves }),
+		});
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to reorder tasks");
+		}
+	}
 }
 
 export default new BoardService();

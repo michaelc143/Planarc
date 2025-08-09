@@ -1,0 +1,22 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Jest tests for Boards components",
+			"type": "shell",
+			"command": "npm test -- Boards --watchAll=false --silent=false",
+			"isBackground": false,
+			"problemMatcher": [
+				"$eslint-stylish"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run boards tests",
+			"type": "shell",
+			"command": "npm test -- Boards --watchAll=false",
+			"isBackground": false,
+			"group": "build"
+		}
+	]
+}

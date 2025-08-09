@@ -22,6 +22,7 @@ export default function Navbar(): React.JSX.Element {
 					{isLoggedIn ? (
 						<>
 							<Link to="/dashboard" className="text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-800 px-4 py-2">Dashboard</Link>
+							<Link to="/boards" className="text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-800 px-4 py-2">Boards</Link>
 							<Link to="/logout" className="text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-800 px-4 py-2">Logout</Link>
 							<Link to="/deleteaccount" className="text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-800 px-4 py-2">Delete Account</Link>
 							<Link to="/userinfo" className="text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-800 px-4 py-2">

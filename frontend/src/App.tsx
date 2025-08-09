@@ -17,6 +17,8 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { UserProvider } from "./contexts/UserContext";
 import { ToastContainer } from "react-toastify";
+import BoardsPage from "./components/Boards/BoardsPage";
+import BoardDetail from "./components/Boards/BoardDetail";
 
 function App() {
 	return (
@@ -36,6 +38,8 @@ function App() {
 							<Route path='/editprofile' element={<EditProfile />} />
 							<Route path='/editusername' element={<EditUsername />} />
 							<Route path='/dashboard' element={<Dashboard />} />
+							<Route path='/boards' element={<BoardsPage />} />
+							<Route path='/boards/:boardId' element={<BoardDetail />} />
 							<Route path='*' element={<PageNotFound />} />
 						</Routes>
 					</Router>

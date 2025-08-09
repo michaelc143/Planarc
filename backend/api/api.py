@@ -7,6 +7,7 @@ from models import db
 from auth_routes import auth_bp
 from user_routes import user_bp
 from routes import api_bp
+from board_routes import board_bp
 
 
 load_dotenv()
@@ -14,10 +15,15 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URI')
 db.init_app(app)
 
+# Create all tables if they don't exist (ensures new models are applied)
+with app.app_context():
+    db.create_all()
+
 # Register blueprints first
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(api_bp, url_prefix='/api')
+app.register_blueprint(board_bp, url_prefix='/api')
 
 # Apply CORS to the app and all blueprints
 CORS(app, origins=["http://localhost:3000"], supports_credentials=True)

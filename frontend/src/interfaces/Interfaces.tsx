@@ -59,3 +59,27 @@ export type Task = {
   created_at: string;
   updated_at: string;
 }
+
+// Boards Feature
+export type Board = {
+  id: number;
+  name: string;
+  description?: string;
+  owner_id: number;
+  created_at: string;
+  updated_at?: string;
+}
+
+export type BoardTask = {
+  id: number;
+  title: string;
+  description?: string;
+  status: "todo" | "in_progress" | "review" | "done";
+  priority: "low" | "medium" | "high" | "critical";
+  board_id: number;
+  assigned_to?: number;
+  created_by: number;
+  due_date?: string;
+  created_at: string;
+  updated_at?: string;
+}

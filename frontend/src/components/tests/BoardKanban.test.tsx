@@ -1,11 +1,17 @@
 import React from "react";
-import { render, screen, waitFor, act } from "@testing-library/react";
+import { render, screen, waitFor, act, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import BoardKanban from "../Boards/BoardKanban";
 
 jest.mock("../../services/board-service", () => ({
 	__esModule: true,
 	default: {
+		listStatuses: jest.fn().mockResolvedValue([
+			{ id: 1, name: "todo", position: 0 },
+			{ id: 2, name: "in_progress", position: 1 },
+			{ id: 3, name: "review", position: 2 },
+			{ id: 4, name: "done", position: 3 },
+		]),
 		reorderTasks: jest.fn(),
 		updateTask: jest.fn(),
 		deleteTask: jest.fn(),
@@ -29,9 +35,9 @@ describe("BoardKanban", () => {
 		const setTasks = jest.fn();
 		render(<BoardKanban boardId={1} tasks={tasks} setTasks={setTasks} />);
 
-		// columns show tasks
-		expect(screen.getByText("T1")).toBeInTheDocument();
-		expect(screen.getByText("T2")).toBeInTheDocument();
+		// columns show tasks (statuses load async)
+		await screen.findByText("T1");
+		await screen.findByText("T2");
 
 		// edit T1
 		await userEvent.click(screen.getAllByText("Edit")[0]);
@@ -47,8 +53,11 @@ describe("BoardKanban", () => {
 		await waitFor(() => expect(boardService.updateTask).toHaveBeenCalled());
 		await waitFor(() => expect(boardService.reorderTasks).toHaveBeenCalled());
 
-		// delete T2
-		await userEvent.click(screen.getAllByText("Delete")[1]);
+		// delete T2 (target the delete inside the T2 card specifically)
+		const t2 = await screen.findByText("T2");
+		const t2Card = t2.closest("[draggable=\"true\"]") as HTMLElement | null;
+		expect(t2Card).not.toBeNull();
+		await userEvent.click(within(t2Card as HTMLElement).getByText("Delete"));
 		await waitFor(() => expect(boardService.deleteTask).toHaveBeenCalledWith(1, 2));
 	});
 });

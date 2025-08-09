@@ -30,14 +30,43 @@ class Board(db.Model):
 
     owner = db.relationship('User', backref=db.backref('boards', lazy=True))
 
+class BoardStatus(db.Model):
+    """ Custom statuses per board """
+    __tablename__ = 'board_statuses'
+    id = db.Column(db.Integer, primary_key=True)
+    board_id = db.Column(db.Integer, db.ForeignKey('boards.id', ondelete='CASCADE'), nullable=False)
+    name = db.Column(db.String(50), nullable=False)
+    position = db.Column(db.Integer, default=0)  # order of columns
+
+    __table_args__ = (
+        db.UniqueConstraint('board_id', 'name', name='uq_board_status_name'),
+    )
+
+    board = db.relationship('Board', backref=db.backref('statuses', lazy=True, cascade="all, delete-orphan"))
+
+class BoardPriority(db.Model):
+    """ Custom priorities per board """
+    __tablename__ = 'board_priorities'
+    id = db.Column(db.Integer, primary_key=True)
+    board_id = db.Column(db.Integer, db.ForeignKey('boards.id', ondelete='CASCADE'), nullable=False)
+    name = db.Column(db.String(50), nullable=False)
+    position = db.Column(db.Integer, default=0)  # order of priorities
+
+    __table_args__ = (
+        db.UniqueConstraint('board_id', 'name', name='uq_board_priority_name'),
+    )
+
+    board = db.relationship('Board', backref=db.backref('priorities', lazy=True, cascade="all, delete-orphan"))
+
 class BoardTask(db.Model):
     """ Task Model scoped to a Board """
     __tablename__ = 'board_tasks'
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
-    status = db.Column(db.Enum('todo', 'in_progress', 'review', 'done'), default='todo')
-    priority = db.Column(db.Enum('low', 'medium', 'high', 'critical'), default='medium')
+    status = db.Column(db.String(50), default='todo')  # free-form tied to BoardStatus.name
+    # priority becomes a free-form string tied to BoardPriority.name
+    priority = db.Column(db.String(50), default='medium')
     board_id = db.Column(db.Integer, db.ForeignKey('boards.id', ondelete='CASCADE'))
     assigned_to = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))

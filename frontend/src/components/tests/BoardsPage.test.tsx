@@ -11,6 +11,7 @@ jest.mock("../../services/board-service", () => ({
 	default: {
 		listBoards: jest.fn(),
 		createBoard: jest.fn(),
+		deleteBoard: jest.fn(),
 	},
 }));
 
@@ -41,13 +42,14 @@ describe("BoardsPage", () => {
 		jest.resetAllMocks();
 	});
 
-	test("lists boards and can create a new board", async () => {
+	test("lists boards, can create and delete a board", async () => {
 		const boards = [
 			{ id: 1, name: "Board A", description: "desc A", owner_id: 1, created_at: "", updated_at: "" },
 			{ id: 2, name: "Board B", description: "desc B", owner_id: 1, created_at: "", updated_at: "" },
 		];
 		(boardService.listBoards as jest.Mock).mockResolvedValueOnce(boards);
 		(boardService.createBoard as jest.Mock).mockResolvedValueOnce({ id: 3, name: "New Board", description: "new", owner_id: 1, created_at: "", updated_at: "" });
+		(boardService.deleteBoard as jest.Mock).mockResolvedValueOnce(undefined);
 
 		renderWithAuth(<BoardsPage />);
 
@@ -64,5 +66,11 @@ describe("BoardsPage", () => {
 		await waitFor(() => expect(boardService.createBoard).toHaveBeenCalled());
 		// assert new board link appears
 		await screen.findByRole("link", { name: "New Board" });
+
+		// delete an existing board
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		(window as any).confirm = jest.fn(() => true);
+		await userEvent.click(screen.getAllByText("Delete")[0]);
+		await waitFor(() => expect(boardService.deleteBoard).toHaveBeenCalled());
 	});
 });

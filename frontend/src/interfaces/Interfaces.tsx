@@ -77,8 +77,8 @@ export type BoardTask = {
   id: number;
   title: string;
   description?: string;
-  status: "todo" | "in_progress" | "review" | "done";
-  priority: "low" | "medium" | "high" | "critical";
+  status: string;
+  priority: string;
   board_id: number;
   assigned_to?: number;
   created_by: number;
@@ -86,4 +86,16 @@ export type BoardTask = {
   position?: number;
   created_at: string;
   updated_at?: string;
+}
+
+export type BoardStatus = {
+  id: number;
+  name: string;
+  position: number;
+}
+
+export type BoardPriority = {
+  id: number;
+  name: string;
+  position: number;
 }

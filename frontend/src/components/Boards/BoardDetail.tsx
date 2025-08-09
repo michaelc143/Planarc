@@ -4,6 +4,7 @@ import { BoardTask, Board } from "../../interfaces/Interfaces";
 import boardService from "../../services/board-service";
 import { AuthContext } from "../../contexts/AuthContext";
 import BoardKanban from "./BoardKanban";
+import { StatusPicker, PriorityPicker } from "./StatusPriorityPickers";
 
 export default function BoardDetail(): React.JSX.Element {
 	const { isLoggedIn } = useContext(AuthContext);
@@ -11,11 +12,12 @@ export default function BoardDetail(): React.JSX.Element {
 	const id = Number(boardId);
 	const [board, setBoard] = useState<Board | null>(null);
 	const [tasks, setTasks] = useState<BoardTask[]>([]);
+	const [createStatusName, setCreateStatusName] = useState<string>("");
 	const [loading, setLoading] = useState<boolean>(true);
 	const [error, setError] = useState<string>("");
 	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState("");
-	const [priority, setPriority] = useState<BoardTask["priority"]>("medium");
+	const [priority, setPriority] = useState<string>("medium");
 	const [editingBoard, setEditingBoard] = useState<boolean>(false);
 	const [boardName, setBoardName] = useState<string>("");
 	const [boardDesc, setBoardDesc] = useState<string>("");
@@ -31,6 +33,7 @@ export default function BoardDetail(): React.JSX.Element {
 				setBoardName(b.name);
 				setBoardDesc(b.description ?? "");
 				setTasks(t);
+				setCreateStatusName("");
 			} catch (e) {
 				const msg = e instanceof Error ? e.message : "Failed to load board";
 				setError(msg);
@@ -46,7 +49,7 @@ export default function BoardDetail(): React.JSX.Element {
 			const created = await boardService.createTask(id, {
 				title,
 				description,
-				status: "todo",
+				status: createStatusName || "todo",
 				priority,
 				assigned_to: undefined,
 				due_date: undefined,
@@ -55,6 +58,7 @@ export default function BoardDetail(): React.JSX.Element {
 			setTitle("");
 			setDescription("");
 			setPriority("medium");
+			setCreateStatusName("");
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : "Failed to create task";
 			setError(msg);
@@ -118,28 +122,40 @@ export default function BoardDetail(): React.JSX.Element {
 				</>
 			)}
 
-			<form onSubmit={onCreateTask} className="mb-6 grid gap-2 grid-cols-1 sm:grid-cols-4">
-				<input
-					type="text"
-					className="border px-3 py-2 rounded"
-					placeholder="Task title"
-					value={title}
-					onChange={(e) => setTitle(e.target.value)}
-					required
-				/>
-				<select className="border px-3 py-2 rounded" value={priority} onChange={(e) => setPriority(e.target.value as BoardTask["priority"]) }>
-					<option value="low">Low</option>
-					<option value="medium">Medium</option>
-					<option value="high">High</option>
-					<option value="critical">Critical</option>
-				</select>
-				<textarea
-					className="border px-3 py-2 rounded sm:col-span-2"
-					placeholder="Description"
-					value={description}
-					onChange={(e) => setDescription(e.target.value)}
-				/>
-				<button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded sm:col-span-4">Add Task</button>
+			<form onSubmit={onCreateTask} className="mb-6 bg-white border rounded p-4 shadow-sm">
+				<div className="grid gap-3 grid-cols-1 sm:grid-cols-4">
+					<div className="sm:col-span-2">
+						<label className="block text-sm text-gray-700 mb-1">Title</label>
+						<input
+							type="text"
+							className="w-full border px-3 py-2 rounded"
+							placeholder="Task title"
+							value={title}
+							onChange={(e) => setTitle(e.target.value)}
+							required
+						/>
+					</div>
+					<div>
+						<label className="block text-sm text-gray-700 mb-1">Priority</label>
+						<PriorityPicker boardId={id} value={priority} onChange={setPriority} />
+					</div>
+					<div>
+						<label className="block text-sm text-gray-700 mb-1">Status</label>
+						<StatusPicker boardId={id} value={createStatusName} onChange={setCreateStatusName} />
+					</div>
+					<div className="sm:col-span-4">
+						<label className="block text-sm text-gray-700 mb-1">Description</label>
+						<textarea
+							className="w-full border px-3 py-2 rounded"
+							placeholder="Description"
+							value={description}
+							onChange={(e) => setDescription(e.target.value)}
+						/>
+					</div>
+					<div className="sm:col-span-4 flex justify-end">
+						<button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Add Task</button>
+					</div>
+				</div>
 			</form>
 
 			<BoardKanban boardId={id} tasks={tasks} setTasks={setTasks} />

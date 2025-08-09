@@ -39,6 +39,17 @@ export default function BoardsPage(): React.JSX.Element {
 		}
 	};
 
+	const onDeleteBoard = async (boardId: number) => {
+		if (!window.confirm("Delete this board? This cannot be undone.")) { return; }
+		try {
+			await boardService.deleteBoard(boardId);
+			setBoards(prev => prev.filter(b => b.id !== boardId));
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : "Failed to delete board";
+			setError(msg);
+		}
+	};
+
 	if (!isLoggedIn) {
 		return <Navigate to="/" />;
 	}
@@ -72,12 +83,15 @@ export default function BoardsPage(): React.JSX.Element {
 			<ul className="space-y-3">
 				{boards.map((b) => (
 					<li key={b.id} className="border rounded p-3">
-						<div className="font-semibold">
-							<Link className="text-blue-600 hover:underline" to={`/boards/${b.id}`}>
-								{b.name}
-							</Link>
+						<div className="flex items-start justify-between gap-2">
+							<div className="font-semibold">
+								<Link className="text-blue-600 hover:underline" to={`/boards/${b.id}`}>
+									{b.name}
+								</Link>
+								<div className="text-sm text-gray-600">{b.description}</div>
+							</div>
+							<button className="text-red-600 underline text-sm" onClick={() => onDeleteBoard(b.id)}>Delete</button>
 						</div>
-						<div className="text-sm text-gray-600">{b.description}</div>
 					</li>
 				))}
 			</ul>

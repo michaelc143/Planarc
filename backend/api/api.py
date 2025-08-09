@@ -30,6 +30,54 @@ with app.app_context():
         db.session.commit()
     except Exception:
         db.session.rollback()
+        # Best-effort migrations for Kanban position + index and custom statuses
+        try:
+            db.session.execute(text("ALTER TABLE board_tasks ADD COLUMN position INT DEFAULT 0"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        # ensure board_priorities table exists
+        try:
+            db.session.execute(text("""
+                CREATE TABLE IF NOT EXISTS board_priorities (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    board_id INT NOT NULL,
+                    name VARCHAR(50) NOT NULL,
+                    position INT DEFAULT 0,
+                    UNIQUE KEY uq_board_priority_name (board_id, name),
+                    CONSTRAINT fk_priority_board FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        # alter priority to VARCHAR for custom priorities
+        try:
+            db.session.execute(text("ALTER TABLE board_tasks MODIFY COLUMN priority VARCHAR(50) DEFAULT 'medium'"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        # ensure board_statuses table exists
+        try:
+            db.session.execute(text("""
+                CREATE TABLE IF NOT EXISTS board_statuses (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    board_id INT NOT NULL,
+                    name VARCHAR(50) NOT NULL,
+                    position INT DEFAULT 0,
+                    UNIQUE KEY uq_board_status_name (board_id, name),
+                    CONSTRAINT fk_status_board FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        # try to alter status to VARCHAR(50) in case it's an ENUM from earlier versions
+        try:
+            db.session.execute(text("ALTER TABLE board_tasks MODIFY COLUMN status VARCHAR(50) DEFAULT 'todo'"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
 # Register blueprints first
 app.register_blueprint(auth_bp, url_prefix='/api/auth')

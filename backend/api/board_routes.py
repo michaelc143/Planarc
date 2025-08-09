@@ -1,7 +1,7 @@
 """ Board and Task routes for the API """
 import sqlalchemy.exc
 from flask import Blueprint, jsonify, request
-from models import db, Board, BoardTask
+from models import db, Board, BoardTask, BoardStatus, BoardPriority
 from auth_middleware import token_required
 from datetime import datetime
 
@@ -52,6 +52,15 @@ def create_board(current_user):
             return jsonify({'message': 'Name is required'}), 400
         board = Board(name=name, description=description, owner_id=current_user.id)
         db.session.add(board)
+        db.session.commit()
+        # seed default statuses for the board if none provided
+        defaults = data.get('statuses') or ['todo', 'in_progress', 'review', 'done']
+        for idx, s in enumerate(defaults):
+            db.session.add(BoardStatus(board_id=board.id, name=s, position=idx))
+        # seed default priorities for the board if none provided
+        default_priorities = data.get('priorities') or ['low', 'medium', 'high', 'critical']
+        for idx, p in enumerate(default_priorities):
+            db.session.add(BoardPriority(board_id=board.id, name=p, position=idx))
         db.session.commit()
         return jsonify({
             'id': board.id,
@@ -123,10 +132,10 @@ def list_board_tasks(current_user, board_id):
         board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
         if not board:
             return jsonify({'message': 'Board not found'}), 404
-        tasks = (BoardTask.query
-                 .filter_by(board_id=board.id)
-                 .order_by(BoardTask.status, BoardTask.position, BoardTask.id)
-                 .all())
+        # order tasks by status column order then position then id
+        status_order = {s.name: s.position for s in BoardStatus.query.filter_by(board_id=board.id).order_by(BoardStatus.position).all()}
+        tasks = BoardTask.query.filter_by(board_id=board.id).all()
+        tasks.sort(key=lambda t: (status_order.get(t.status, 9999), t.position or 0, t.id))
         return jsonify([
             {
                 'id': t.id,
@@ -159,16 +168,28 @@ def create_board_task(current_user, board_id):
             return jsonify({'message': 'Title is required'}), 400
         # next position in the column (status)
         status = data.get('status', 'todo')
+        # ensure status exists in this board, else add it at end
+        status_row = BoardStatus.query.filter_by(board_id=board.id, name=status).first()
+        if not status_row:
+            max_pos = db.session.query(db.func.max(BoardStatus.position)).filter_by(board_id=board.id).scalar() or 0
+            db.session.add(BoardStatus(board_id=board.id, name=status, position=max_pos + 1))
+            db.session.flush()
         last = (BoardTask.query
                 .filter_by(board_id=board.id, status=status)
                 .order_by(BoardTask.position.desc())
                 .first())
         next_pos = (last.position + 1) if last and last.position is not None else 0
+        # ensure priority exists in board priorities
+        prio = data.get('priority', 'medium')
+        if not BoardPriority.query.filter_by(board_id=board.id, name=prio).first():
+            max_pp = db.session.query(db.func.max(BoardPriority.position)).filter_by(board_id=board.id).scalar() or 0
+            db.session.add(BoardPriority(board_id=board.id, name=prio, position=max_pp + 1))
+            db.session.flush()
         task = BoardTask(
             title=title,
             description=data.get('description'),
             status=status,
-            priority=data.get('priority', 'medium'),
+            priority=prio,
             board_id=board.id,
             assigned_to=data.get('assigned_to'),
             created_by=current_user.id,
@@ -208,6 +229,21 @@ def update_board_task(current_user, board_id, task_id):
         data = request.get_json() or {}
         for field in ['title', 'description', 'status', 'priority', 'assigned_to']:
             if field in data:
+                # if changing to a new status ensure it exists
+                if field == 'status':
+                    new_status = data[field]
+                    status_row = BoardStatus.query.filter_by(board_id=board.id, name=new_status).first()
+                    if not status_row:
+                        max_pos = db.session.query(db.func.max(BoardStatus.position)).filter_by(board_id=board.id).scalar() or 0
+                        db.session.add(BoardStatus(board_id=board.id, name=new_status, position=max_pos + 1))
+                        db.session.flush()
+                if field == 'priority':
+                    new_prio = data[field]
+                    prio_row = BoardPriority.query.filter_by(board_id=board.id, name=new_prio).first()
+                    if not prio_row:
+                        max_pp = db.session.query(db.func.max(BoardPriority.position)).filter_by(board_id=board.id).scalar() or 0
+                        db.session.add(BoardPriority(board_id=board.id, name=new_prio, position=max_pp + 1))
+                        db.session.flush()
                 setattr(task, field, data[field])
         if 'due_date' in data:
             task.due_date = _parse_date(data.get('due_date'))
@@ -256,6 +292,11 @@ def reorder_tasks(current_user, board_id):
             task = BoardTask.query.filter_by(id=task_id, board_id=board.id).first()
             if not task:
                 return jsonify({'message': f'Task {task_id} not found'}), 404
+            # ensure destination status exists
+            if not BoardStatus.query.filter_by(board_id=board.id, name=to_status).first():
+                max_pos = db.session.query(db.func.max(BoardStatus.position)).filter_by(board_id=board.id).scalar() or 0
+                db.session.add(BoardStatus(board_id=board.id, name=to_status, position=max_pos + 1))
+                db.session.flush()
             # gather tasks in destination column (including the task if already there)
             col_tasks = (BoardTask.query
                          .filter_by(board_id=board.id, status=to_status)
@@ -278,3 +319,142 @@ def reorder_tasks(current_user, board_id):
     except sqlalchemy.exc.SQLAlchemyError:
         db.session.rollback()
         return jsonify({'message': 'Internal server error'}), 500
+
+# Status management endpoints
+@board_bp.route('/boards/<int:board_id>/statuses', methods=['GET'])
+@token_required
+def list_statuses(current_user, board_id):
+    board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    statuses = BoardStatus.query.filter_by(board_id=board.id).order_by(BoardStatus.position, BoardStatus.id).all()
+    return jsonify([
+        {'id': s.id, 'name': s.name, 'position': s.position}
+    for s in statuses]), 200
+
+@board_bp.route('/boards/<int:board_id>/statuses', methods=['POST'])
+@token_required
+def create_status(current_user, board_id):
+    board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    data = request.get_json() or {}
+    name = data.get('name')
+    if not name:
+        return jsonify({'message': 'Name is required'}), 400
+    if BoardStatus.query.filter_by(board_id=board.id, name=name).first():
+        return jsonify({'message': 'Status already exists'}), 400
+    max_pos = db.session.query(db.func.max(BoardStatus.position)).filter_by(board_id=board.id).scalar() or 0
+    status = BoardStatus(board_id=board.id, name=name, position=max_pos + 1)
+    db.session.add(status)
+    db.session.commit()
+    return jsonify({'id': status.id, 'name': status.name, 'position': status.position}), 201
+
+@board_bp.route('/boards/<int:board_id>/statuses/<int:status_id>', methods=['PUT'])
+@token_required
+def update_status(current_user, board_id, status_id):
+    board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    status = BoardStatus.query.filter_by(id=status_id, board_id=board.id).first()
+    if not status:
+        return jsonify({'message': 'Status not found'}), 404
+    data = request.get_json() or {}
+    if 'name' in data:
+        # enforce uniqueness per board
+        if BoardStatus.query.filter(BoardStatus.board_id==board.id, BoardStatus.name==data['name'], BoardStatus.id!=status.id).first():
+            return jsonify({'message': 'Status name already used'}), 400
+        # update all tasks referencing old name
+        old = status.name
+        status.name = data['name']
+        BoardTask.query.filter_by(board_id=board.id, status=old).update({BoardTask.status: data['name']})
+    if 'position' in data:
+        status.position = int(data['position'])
+    db.session.commit()
+    return jsonify({'message': 'Status updated'}), 200
+
+@board_bp.route('/boards/<int:board_id>/statuses/<int:status_id>', methods=['DELETE'])
+@token_required
+def delete_status(current_user, board_id, status_id):
+    board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    status = BoardStatus.query.filter_by(id=status_id, board_id=board.id).first()
+    if not status:
+        return jsonify({'message': 'Status not found'}), 404
+    # move tasks in this status to fallback (first status) or 'todo'
+    fallback = BoardStatus.query.filter_by(board_id=board.id).order_by(BoardStatus.position).first()
+    fallback_name = fallback.name if fallback and fallback.id != status.id else 'todo'
+    BoardTask.query.filter_by(board_id=board.id, status=status.name).update({BoardTask.status: fallback_name, BoardTask.position: 0})
+    db.session.delete(status)
+    db.session.commit()
+    return jsonify({'message': 'Status deleted'}), 200
+
+# Priority management endpoints
+@board_bp.route('/boards/<int:board_id>/priorities', methods=['GET'])
+@token_required
+def list_priorities(current_user, board_id):
+    board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    priorities = BoardPriority.query.filter_by(board_id=board.id).order_by(BoardPriority.position, BoardPriority.id).all()
+    return jsonify([
+        {'id': p.id, 'name': p.name, 'position': p.position}
+    for p in priorities]), 200
+
+@board_bp.route('/boards/<int:board_id>/priorities', methods=['POST'])
+@token_required
+def create_priority(current_user, board_id):
+    board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    data = request.get_json() or {}
+    name = data.get('name')
+    if not name:
+        return jsonify({'message': 'Name is required'}), 400
+    if BoardPriority.query.filter_by(board_id=board.id, name=name).first():
+        return jsonify({'message': 'Priority already exists'}), 400
+    max_pos = db.session.query(db.func.max(BoardPriority.position)).filter_by(board_id=board.id).scalar() or 0
+    pr = BoardPriority(board_id=board.id, name=name, position=max_pos + 1)
+    db.session.add(pr)
+    db.session.commit()
+    return jsonify({'id': pr.id, 'name': pr.name, 'position': pr.position}), 201
+
+@board_bp.route('/boards/<int:board_id>/priorities/<int:priority_id>', methods=['PUT'])
+@token_required
+def update_priority(current_user, board_id, priority_id):
+    board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    pr = BoardPriority.query.filter_by(id=priority_id, board_id=board.id).first()
+    if not pr:
+        return jsonify({'message': 'Priority not found'}), 404
+    data = request.get_json() or {}
+    if 'name' in data:
+        if BoardPriority.query.filter(BoardPriority.board_id==board.id, BoardPriority.name==data['name'], BoardPriority.id!=pr.id).first():
+            return jsonify({'message': 'Priority name already used'}), 400
+        old = pr.name
+        pr.name = data['name']
+        # update all tasks referencing old name
+        BoardTask.query.filter_by(board_id=board.id, priority=old).update({BoardTask.priority: data['name']})
+    if 'position' in data:
+        pr.position = int(data['position'])
+    db.session.commit()
+    return jsonify({'message': 'Priority updated'}), 200
+
+@board_bp.route('/boards/<int:board_id>/priorities/<int:priority_id>', methods=['DELETE'])
+@token_required
+def delete_priority(current_user, board_id, priority_id):
+    board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    pr = BoardPriority.query.filter_by(id=priority_id, board_id=board.id).first()
+    if not pr:
+        return jsonify({'message': 'Priority not found'}), 404
+    # move tasks with this priority to fallback (first priority) or 'medium'
+    fallback = BoardPriority.query.filter_by(board_id=board.id).order_by(BoardPriority.position).first()
+    fallback_name = fallback.name if fallback and fallback.id != pr.id else 'medium'
+    BoardTask.query.filter_by(board_id=board.id, priority=pr.name).update({BoardTask.priority: fallback_name})
+    db.session.delete(pr)
+    db.session.commit()
+    return jsonify({'message': 'Priority deleted'}), 200

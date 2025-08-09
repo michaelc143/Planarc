@@ -1,4 +1,4 @@
-import { Board, BoardTask } from "../interfaces/Interfaces";
+import { Board, BoardTask, BoardStatus, BoardPriority } from "../interfaces/Interfaces";
 import authService from "./auth-service";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
@@ -102,7 +102,7 @@ class BoardService {
 		}
 	}
 
-	async reorderTasks(boardId: number, moves: Array<{ task_id: number; to_status: BoardTask["status"]; to_position: number }>): Promise<void> {
+	async reorderTasks(boardId: number, moves: Array<{ task_id: number; to_status: string; to_position: number }>): Promise<void> {
 		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/tasks/reorder`, {
 			method: "POST",
 			headers: this.authHeaders(),
@@ -110,6 +110,90 @@ class BoardService {
 		});
 		if (!res.ok) {
 			throw new Error((await res.json()).message || "Failed to reorder tasks");
+		}
+	}
+
+	// Statuses
+	async listStatuses(boardId: number): Promise<BoardStatus[]> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/statuses`, { headers: this.authHeaders() });
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to fetch statuses");
+		}
+		return res.json();
+	}
+
+	async createStatus(boardId: number, name: string): Promise<BoardStatus> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/statuses`, {
+			method: "POST",
+			headers: this.authHeaders(),
+			body: JSON.stringify({ name }),
+		});
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to create status");
+		}
+		return res.json();
+	}
+
+	async updateStatus(boardId: number, statusId: number, payload: Partial<Pick<BoardStatus, "name" | "position">>): Promise<void> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/statuses/${statusId}`, {
+			method: "PUT",
+			headers: this.authHeaders(),
+			body: JSON.stringify(payload),
+		});
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to update status");
+		}
+	}
+
+	async deleteStatus(boardId: number, statusId: number): Promise<void> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/statuses/${statusId}`, {
+			method: "DELETE",
+			headers: this.authHeaders(),
+		});
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to delete status");
+		}
+	}
+
+	// Priorities
+	async listPriorities(boardId: number): Promise<BoardPriority[]> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/priorities`, { headers: this.authHeaders() });
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to fetch priorities");
+		}
+		return res.json();
+	}
+
+	async createPriority(boardId: number, name: string): Promise<BoardPriority> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/priorities`, {
+			method: "POST",
+			headers: this.authHeaders(),
+			body: JSON.stringify({ name }),
+		});
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to create priority");
+		}
+		return res.json();
+	}
+
+	async updatePriority(boardId: number, priorityId: number, payload: Partial<Pick<BoardPriority, "name" | "position">>): Promise<void> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/priorities/${priorityId}`, {
+			method: "PUT",
+			headers: this.authHeaders(),
+			body: JSON.stringify(payload),
+		});
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to update priority");
+		}
+	}
+
+	async deletePriority(boardId: number, priorityId: number): Promise<void> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/priorities/${priorityId}`, {
+			method: "DELETE",
+			headers: this.authHeaders(),
+		});
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to delete priority");
 		}
 	}
 }

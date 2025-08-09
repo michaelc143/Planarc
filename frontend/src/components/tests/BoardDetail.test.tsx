@@ -11,6 +11,7 @@ jest.mock("../../services/board-service", () => ({
 	default: {
 		getBoard: jest.fn(),
 		listTasks: jest.fn(),
+		listStatuses: jest.fn(),
 		updateBoard: jest.fn(),
 		createTask: jest.fn(),
 	},
@@ -60,12 +61,20 @@ describe("BoardDetail", () => {
 		(boardService.listTasks as jest.Mock).mockResolvedValueOnce([
 			{ id: 11, title: "T1", description: "d1", status: "todo", priority: "medium", board_id: 1, created_by: 1, created_at: "" },
 		]);
+		(boardService.listStatuses as jest.Mock).mockResolvedValueOnce([
+			{ id: 1, name: "todo", position: 0 },
+			{ id: 2, name: "in_progress", position: 1 },
+			{ id: 3, name: "review", position: 2 },
+			{ id: 4, name: "done", position: 3 },
+		]);
 		(boardService.updateBoard as jest.Mock).mockResolvedValueOnce(undefined);
 		(boardService.createTask as jest.Mock).mockResolvedValueOnce({ id: 12, title: "NewT", description: "nd", status: "todo", priority: "medium", board_id: 1, created_by: 1, created_at: "" });
 
 		renderWithAuth(<BoardDetail />);
 
 		await waitFor(() => expect(screen.getByText("Board A")).toBeInTheDocument());
+		// statuses are loaded async for the create form
+		await screen.findByRole("button", { name: /Add Task/i });
 		expect(screen.getByTestId("kanban")).toHaveTextContent("Tasks: 1");
 
 		// edit board

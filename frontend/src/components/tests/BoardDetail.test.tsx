@@ -68,7 +68,7 @@ describe("BoardDetail", () => {
 			{ id: 4, name: "done", position: 3 },
 		]);
 		(boardService.updateBoard as jest.Mock).mockResolvedValueOnce(undefined);
-		(boardService.createTask as jest.Mock).mockResolvedValueOnce({ id: 12, title: "NewT", description: "nd", status: "todo", priority: "medium", board_id: 1, created_by: 1, created_at: "" });
+		(boardService.createTask as jest.Mock).mockResolvedValueOnce({ id: 12, title: "NewT", description: "nd", status: "todo", priority: "medium", estimate: 5, board_id: 1, created_by: 1, created_at: "" });
 
 		renderWithAuth(<BoardDetail />);
 
@@ -88,8 +88,12 @@ describe("BoardDetail", () => {
 		// create task
 		await userEvent.type(screen.getByPlaceholderText(/Task title/i), "NewT");
 		await userEvent.type(screen.getByPlaceholderText(/Description/i), "nd");
+		// set estimate
+		await userEvent.type(screen.getByPlaceholderText(/e\.g\. 3/i), "5");
 		await userEvent.click(screen.getByRole("button", { name: /Add Task/i }));
 		await waitFor(() => expect(boardService.createTask).toHaveBeenCalled());
+		// ensure estimate persisted in payload
+		expect((boardService.createTask as jest.Mock).mock.calls[0][1]).toEqual(expect.objectContaining({ estimate: 5 }));
 		expect(screen.getByTestId("kanban")).toHaveTextContent("Tasks: 2");
 	});
 });

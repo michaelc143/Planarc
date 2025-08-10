@@ -160,6 +160,8 @@ class BoardTask(db.Model):
     created_by: Mapped[int] = mapped_column(ForeignKey('users.id'))
     due_date: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
     position: Mapped[int] = mapped_column(Integer, default=0)  # Order within its status column
+    # Optional estimate of effort (e.g., story points)
+    estimate: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
 
@@ -167,7 +169,7 @@ class BoardTask(db.Model):
     assignee: Mapped['User'] = relationship('User', foreign_keys=[assigned_to], backref=db.backref('assigned_board_tasks', lazy=True))
     creator: Mapped['User'] = relationship('User', foreign_keys=[created_by], backref=db.backref('created_board_tasks', lazy=True))
 
-    def __init__(self, title, description, assigned_to, created_by, due_date, position, status, priority, board_id):
+    def __init__(self, title, description, assigned_to, created_by, due_date, position, status, priority, board_id, estimate=None):
         self.title = title
         self.description = description
         self.assigned_to = assigned_to
@@ -177,6 +179,7 @@ class BoardTask(db.Model):
         self.status = status
         self.priority = priority
         self.board_id = board_id
+        self.estimate = estimate
 
 class BoardMember(db.Model):
     """ Membership for boards

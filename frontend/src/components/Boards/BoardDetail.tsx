@@ -19,6 +19,7 @@ export default function BoardDetail(): React.JSX.Element {
 	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState("");
 	const [priority, setPriority] = useState<string>("medium");
+	const [estimate, setEstimate] = useState<string>("");
 	const [editingBoard, setEditingBoard] = useState<boolean>(false);
 	const [boardName, setBoardName] = useState<string>("");
 	const [boardDesc, setBoardDesc] = useState<string>("");
@@ -60,11 +61,13 @@ export default function BoardDetail(): React.JSX.Element {
 				priority,
 				assigned_to: undefined,
 				due_date: undefined,
+				estimate: estimate && /^\d+$/.test(estimate) ? Number(estimate) : undefined,
 			});
 			setTasks((prev) => [created, ...prev]);
 			setTitle("");
 			setDescription("");
 			setPriority("medium");
+			setEstimate("");
 			setCreateStatusName("");
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : "Failed to create task";
@@ -208,6 +211,17 @@ export default function BoardDetail(): React.JSX.Element {
 							placeholder="Description"
 							value={description}
 							onChange={(e) => setDescription(e.target.value)}
+						/>
+					</div>
+					<div className="sm:col-span-1">
+						<label className="block text-sm text-gray-700 mb-1">Estimate (points)</label>
+						<input
+							type="number"
+							min={0}
+							className="w-full border px-3 py-2 rounded"
+							placeholder="e.g. 3"
+							value={estimate}
+							onChange={(e) => setEstimate(e.target.value)}
 						/>
 					</div>
 					<div className="sm:col-span-4 flex justify-end">

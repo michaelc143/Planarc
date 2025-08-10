@@ -110,7 +110,7 @@ class BoardService {
 		return res.json();
 	}
 
-	async createTask(boardId: number, payload: Pick<BoardTask, "title" | "description" | "status" | "priority" | "assigned_to" | "due_date">): Promise<BoardTask> {
+	async createTask(boardId: number, payload: Pick<BoardTask, "title" | "description" | "status" | "priority" | "assigned_to" | "due_date" | "estimate">): Promise<BoardTask> {
 		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/tasks`, {
 			method: "POST",
 			headers: this.authHeaders(),
@@ -122,7 +122,11 @@ class BoardService {
 		return res.json();
 	}
 
-	async updateTask(boardId: number, taskId: number, payload: Partial<Pick<BoardTask, "title" | "description" | "status" | "priority" | "assigned_to" | "due_date" | "position">>): Promise<void> {
+	async updateTask(
+		boardId: number,
+		taskId: number,
+		payload: Partial<Pick<BoardTask, "title" | "description" | "status" | "priority" | "assigned_to" | "due_date" | "position"> & { estimate?: number | null }>,
+	): Promise<void> {
 		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/tasks/${taskId}`, {
 			method: "PUT",
 			headers: this.authHeaders(),

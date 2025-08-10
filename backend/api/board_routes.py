@@ -278,6 +278,7 @@ def list_board_tasks(current_user, board_id) -> Tuple[Response, int]:
                 'assigned_to': t.assigned_to,
                 'created_by': t.created_by,
                 'due_date': t.due_date.isoformat() if t.due_date else None,
+                'estimate': t.estimate,
                 'position': t.position,
                 'created_at': t.created_at.isoformat(),
                 'updated_at': t.updated_at.isoformat() if t.updated_at else None
@@ -303,7 +304,7 @@ def create_board_task(current_user, board_id) -> Tuple[Response, int]:
         title: str | None = data.get('title')
         if not title:
             return jsonify({'message': 'Title is required'}), 400
-        # next position in the column (status)
+    # next position in the column (status)
         status: str | None = data.get('status', 'todo')
         # ensure status exists in this board, else add it at end
         status_row: BoardStatus | None = BoardStatus.query.filter_by(board_id=board.id, name=status).first()
@@ -331,7 +332,8 @@ def create_board_task(current_user, board_id) -> Tuple[Response, int]:
             assigned_to=data.get('assigned_to'),
             created_by=current_user.id,
             due_date=_parse_date(data.get('due_date')),
-            position=next_pos
+            position=next_pos,
+            estimate=(int(data['estimate']) if 'estimate' in data and isinstance(data['estimate'], (int, str)) and str(data['estimate']).isdigit() else None)
         )
         db.session.add(task)
         db.session.commit()
@@ -345,6 +347,7 @@ def create_board_task(current_user, board_id) -> Tuple[Response, int]:
             'assigned_to': task.assigned_to,
             'created_by': task.created_by,
             'due_date': task.due_date.isoformat() if task.due_date else None,
+            'estimate': task.estimate,
             'position': task.position,
             'created_at': task.created_at.isoformat(),
             'updated_at': task.updated_at.isoformat() if task.updated_at else None
@@ -369,7 +372,7 @@ def update_board_task(current_user, board_id, task_id) -> Tuple[Response, int]:
         if not task:
             return jsonify({'message': 'Task not found'}), 404
         data: dict = request.get_json() or {}
-        for field in ['title', 'description', 'status', 'priority', 'assigned_to']:
+        for field in ['title', 'description', 'status', 'priority', 'assigned_to', 'estimate']:
             if field in data:
                 # if changing to a new status ensure it exists
                 if field == 'status':
@@ -386,7 +389,11 @@ def update_board_task(current_user, board_id, task_id) -> Tuple[Response, int]:
                         max_pp: int = db.session.query(db.func.max(BoardPriority.position)).filter_by(board_id=board.id).scalar() or 0
                         db.session.add(BoardPriority(board_id=board.id, name=new_prio, position=max_pp + 1))
                         db.session.flush()
-                setattr(task, field, data[field])
+                if field == 'estimate':
+                    val = data[field]
+                    task.estimate = int(val) if isinstance(val, (int, str)) and str(val).isdigit() else None
+                else:
+                    setattr(task, field, data[field])
         if 'due_date' in data:
             task.due_date = _parse_date(data.get('due_date'))
         db.session.commit()

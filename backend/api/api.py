@@ -44,6 +44,12 @@ with app.app_context():
         db.session.commit()
     except sqlalchemy.exc.SQLAlchemyError:
         db.session.rollback()
+    # add estimate column to board_tasks if missing (best-effort)
+    try:
+        db.session.execute(text("ALTER TABLE board_tasks ADD COLUMN estimate INT NULL"))
+        db.session.commit()
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.session.rollback()
     try:
         db.session.execute(text("CREATE INDEX idx_board_tasks_board_status_position ON board_tasks (board_id, status, position)"))
         db.session.commit()

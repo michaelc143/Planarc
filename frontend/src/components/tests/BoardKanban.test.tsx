@@ -27,9 +27,9 @@ describe("BoardKanban", () => {
 		(window as any).confirm = jest.fn(() => true);
 	});
 
-	test("renders tasks by columns, supports edit, delete, and status change reorder", async () => {
+	test("renders tasks by columns, supports edit (including estimate), delete, and status change reorder", async () => {
 		const tasks = [
-			{ id: 1, title: "T1", description: "d1", status: "todo" as const, priority: "medium" as const, board_id: 1, created_by: 1, created_at: "" },
+			{ id: 1, title: "T1", description: "d1", status: "todo" as const, priority: "medium" as const, estimate: 3, board_id: 1, created_by: 1, created_at: "" },
 			{ id: 2, title: "T2", description: "d2", status: "in_progress" as const, priority: "high" as const, board_id: 1, created_by: 1, created_at: "" },
 		];
 		const setTasks = jest.fn();
@@ -38,6 +38,8 @@ describe("BoardKanban", () => {
 		// columns show tasks (statuses load async)
 		await screen.findByText("T1");
 		await screen.findByText("T2");
+		// estimate is shown for T1
+		expect(screen.getByText(/Estimate:\s*3/i)).toBeInTheDocument();
 
 		// edit T1
 		await userEvent.click(screen.getAllByText("Edit")[0]);
@@ -47,10 +49,16 @@ describe("BoardKanban", () => {
 		// change status to in_progress (triggers reorder API in save)
 		const selects = screen.getAllByRole("combobox");
 		await userEvent.selectOptions(selects[1], "in_progress");
+		// change estimate to 8
+		const estimateInput = screen.getByLabelText(/Estimate \(points\)/i);
+		await userEvent.clear(estimateInput);
+		await userEvent.type(estimateInput, "8");
 		await act(async () => {
 			await userEvent.click(screen.getByRole("button", { name: /Save/i }));
 		});
 		await waitFor(() => expect(boardService.updateTask).toHaveBeenCalled());
+		// ensure estimate in payload
+		expect((boardService.updateTask as jest.Mock).mock.calls[0][2]).toEqual(expect.objectContaining({ estimate: 8 }));
 		await waitFor(() => expect(boardService.reorderTasks).toHaveBeenCalled());
 
 		// delete T2 (target the delete inside the T2 card specifically)

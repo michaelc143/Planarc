@@ -84,6 +84,7 @@ export type BoardTask = {
   assigned_to?: number;
   created_by: number;
   due_date?: string;
+  estimate?: number;
   position?: number;
   created_at: string;
   updated_at?: string;

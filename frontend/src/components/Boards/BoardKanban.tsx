@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { BoardTask, BoardStatus, BoardPriority } from "../../interfaces/Interfaces";
 import boardService from "../../services/board-service";
 import { ToastContext } from "../../contexts/ToastContext";
@@ -130,6 +130,16 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 	const [editPriority, setEditPriority] = useState<string>("medium");
 	const [editStatus, setEditStatus] = useState<string>("todo");
 	const [editOrigStatus, setEditOrigStatus] = useState<string>("todo");
+	const [editEstimate, setEditEstimate] = useState<string>("");
+	const estimateInputRef = useRef<HTMLInputElement | null>(null);
+	const [focusEstimateNext, setFocusEstimateNext] = useState<number | null>(null);
+
+	useEffect(() => {
+		if (editingId != null && focusEstimateNext === editingId && estimateInputRef.current) {
+			estimateInputRef.current.focus();
+			setFocusEstimateNext(null);
+		}
+	}, [editingId, focusEstimateNext]);
 
 	const onDragStart = (t: BoardTask) => (e: React.DragEvent) => {
 		setDragged(t);
@@ -155,19 +165,27 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 		setEditPriority(t.priority);
 		setEditStatus(t.status);
 		setEditOrigStatus(t.status);
+		setEditEstimate(typeof t.estimate === "number" ? String(t.estimate) : "");
 	};
 	const cancelEdit = () => setEditingId(null);
 
 	const saveEdit = async () => {
 		if (editingId == null) { return; }
 		try {
-			await boardService.updateTask(boardId, editingId, { title: editTitle, description: editDesc, priority: editPriority });
+			const trimmed = editEstimate.trim();
+			await boardService.updateTask(boardId, editingId, {
+				title: editTitle,
+				description: editDesc,
+				priority: editPriority,
+				estimate: trimmed === "" ? null : (/^\d+$/.test(trimmed) ? Number(trimmed) : undefined),
+			});
 			if (editStatus !== editOrigStatus) {
 				const toPos = (columns[editStatus] ? columns[editStatus].length : 0);
 				await boardService.reorderTasks(boardId, [{ task_id: editingId, to_status: editStatus, to_position: toPos }]);
 				setTasks(prev => prev.map(t => t.id === editingId ? { ...t, status: editStatus, position: toPos } : t));
 			}
 			setTasks(prev => prev.map(t => t.id === editingId ? { ...t, title: editTitle, description: editDesc, priority: editPriority } : t));
+			setTasks(prev => prev.map(t => t.id === editingId ? { ...t, title: editTitle, description: editDesc, priority: editPriority, estimate: (trimmed === "" ? undefined : (/^\d+$/.test(trimmed) ? Number(trimmed) : t.estimate)) } : t));
 			setEditingId(null);
 		} catch (e) {
 			showToast(e instanceof Error ? e.message : "Failed to update task", "error");
@@ -279,14 +297,14 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 									onDragStart={onDragStart(t)}
 									onDragOver={onDragOver}
 									onDrop={onDropCard(s.name, idx)}
-									className="bg-white border rounded p-2 shadow-sm"
+									className={`bg-white border rounded p-2 shadow-sm ${editingId === t.id ? "relative z-10" : ""}`}
 								>
 									{editingId === t.id ? (
 										<div className="space-y-2">
 											<input className="border w-full px-2 py-1 rounded" value={editTitle} onChange={e => setEditTitle(e.target.value)} />
 											<textarea className="border w-full px-2 py-1 rounded" value={editDesc} onChange={e => setEditDesc(e.target.value)} />
-											<div className="flex gap-2">
-												<select className="border px-2 py-1 rounded" value={editPriority} onChange={e => setEditPriority(e.target.value) }>
+											<div className="flex flex-wrap gap-2">
+												<select className="border px-2 py-1 rounded w-full sm:w-auto" value={editPriority} onChange={e => setEditPriority(e.target.value) }>
 													{(priorities.length ? priorities : [
 														{ id: -1, name: "low", position: 0 },
 														{ id: -2, name: "medium", position: 1 },
@@ -296,9 +314,13 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 														<option key={p.id} value={p.name}>{p.name}</option>
 													))}
 												</select>
-												<select className="border px-2 py-1 rounded capitalize" value={editStatus} onChange={e => setEditStatus(e.target.value) }>
+												<select className="border px-2 py-1 rounded capitalize w-full sm:w-auto" value={editStatus} onChange={e => setEditStatus(e.target.value) }>
 													{statuses.map(st => <option key={st.id} value={st.name}>{st.name.replace("_", " ")}</option>)}
 												</select>
+												<div className="w-full sm:w-auto">
+													<label htmlFor={`estimate-${t.id}`} className="block text-xs text-gray-700 mb-1">Estimate (points)</label>
+													<input ref={estimateInputRef} id={`estimate-${t.id}`} className="border px-2 py-1 rounded w-full sm:w-24" type="number" min={0} value={editEstimate} onChange={e => setEditEstimate(e.target.value)} />
+												</div>
 											</div>
 											<div className="flex gap-2">
 												<button className="bg-blue-600 text-white px-2 py-1 rounded" onClick={saveEdit}>Save</button>
@@ -315,6 +337,17 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 												</div>
 											</div>
 											<div className="text-sm text-gray-600">{t.description}</div>
+											{typeof t.estimate === "number" && (
+												<div className="text-xs text-gray-500 mt-1">
+													Estimate: {t.estimate}
+													<button
+														className="ml-2 underline text-blue-600"
+														onClick={() => { setFocusEstimateNext(t.id); startEdit(t); }}
+													>
+														Change
+													</button>
+												</div>
+											)}
 										</div>
 									)}
 								</div>

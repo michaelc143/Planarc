@@ -64,18 +64,18 @@ export function StatusPicker({ boardId, value, onChange, refreshKey }: StatusPic
 	};
 
 	return (
-		<div className="space-y-2">
-			<div className="flex gap-2 items-center">
-				<select className="border px-2 py-1 rounded capitalize" value={value} onChange={(e) => onChange(e.target.value)}>
+		<div className="space-y-2 min-w-0 max-w-full">
+			<div className="flex gap-2 items-center min-w-0">
+				<select className="border px-2 py-1 rounded capitalize w-full" value={value} onChange={(e) => onChange(e.target.value)}>
 					<option value="" disabled>Select status…</option>
 					{statuses.map((s) => (
 						<option key={s.id} value={s.name}>{s.name.replace("_", " ")}</option>
 					))}
 				</select>
 			</div>
-			<div className="flex gap-2">
-				<input className="border px-2 py-1 rounded" placeholder="New status" value={newName} onChange={(e) => setNewName(e.target.value)} />
-				<button type="button" className="px-3 py-1 border rounded" onClick={add}>Add</button>
+			<div className="flex flex-wrap items-center gap-2 min-w-0">
+				<input className="border px-2 py-1 rounded flex-1 min-w-0 w-full sm:w-auto" placeholder="New status" value={newName} onChange={(e) => setNewName(e.target.value)} />
+				<button type="button" className="px-3 py-1 border rounded shrink-0" onClick={add}>Add</button>
 			</div>
 		</div>
 	);
@@ -126,18 +126,18 @@ export function PriorityPicker({ boardId, value, onChange }: PriorityPickerProps
 	};
 
 	return (
-		<div className="space-y-2">
-			<div className="flex gap-2 items-center">
-				<select className="border px-2 py-1 rounded capitalize" value={value} onChange={(e) => onChange(e.target.value)}>
+		<div className="space-y-2 min-w-0 max-w-full">
+			<div className="flex gap-2 items-center min-w-0">
+				<select className="border px-2 py-1 rounded capitalize w-full" value={value} onChange={(e) => onChange(e.target.value)}>
 					<option value="" disabled>Select priority…</option>
 					{priorities.map((p) => (
 						<option key={p.id} value={p.name}>{p.name}</option>
 					))}
 				</select>
 			</div>
-			<div className="flex gap-2">
-				<input className="border px-2 py-1 rounded" placeholder="New priority" value={newName} onChange={(e) => setNewName(e.target.value)} />
-				<button type="button" className="px-3 py-1 border rounded" onClick={add}>Add</button>
+			<div className="flex flex-wrap items-center gap-2 min-w-0">
+				<input className="border px-2 py-1 rounded flex-1 min-w-0 w-full sm:w-auto" placeholder="New priority" value={newName} onChange={(e) => setNewName(e.target.value)} />
+				<button type="button" className="px-3 py-1 border rounded shrink-0" onClick={add}>Add</button>
 			</div>
 		</div>
 	);

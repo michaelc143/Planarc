@@ -648,7 +648,7 @@ def list_board_members(current_user, board_id) -> Tuple[Response, int]:
             'user_id': m.user_id,
             'username': getattr(m.user, 'username', None),
             'role': m.role,
-            'joined_at': m.joined_at.isoformat()
+            'joined_at': m.joined_at.isoformat() if m.joined_at else None
         }
         for m in members
     ]), 200

@@ -89,3 +89,19 @@ class BoardTask(db.Model):
     board = db.relationship('Board', backref=db.backref('tasks', lazy=True, cascade="all, delete-orphan"))
     assignee = db.relationship('User', foreign_keys=[assigned_to], backref=db.backref('assigned_board_tasks', lazy=True))
     creator = db.relationship('User', foreign_keys=[created_by], backref=db.backref('created_board_tasks', lazy=True))
+
+class BoardMember(db.Model):
+    """ Membership for boards """
+    __tablename__ = 'board_members'
+    id = db.Column(db.Integer, primary_key=True)
+    board_id = db.Column(db.Integer, db.ForeignKey('boards.id', ondelete='CASCADE'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    role = db.Column(db.String(20), default='member')  # owner|admin|member|viewer
+    joined_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+    __table_args__ = (
+        db.UniqueConstraint('board_id', 'user_id', name='uq_board_user'),
+    )
+
+    board = db.relationship('Board', backref=db.backref('members', lazy=True, cascade="all, delete-orphan"))
+    user = db.relationship('User', backref=db.backref('board_memberships', lazy=True, cascade="all, delete-orphan"))

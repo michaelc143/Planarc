@@ -17,13 +17,15 @@ class AuthService {
 			throw new Error(error.message || "Login failed");
 		}
 
-		const data = await response.json();
-    
+		const data: AuthResponse = await response.json();
+		// Normalize user shape to always include userId (string)
+		const u = data.user as User;
+		const normalizedUser: User = { ...u, userId: u.userId ?? String(u.id ?? "") };
+		const normalized: AuthResponse = { ...data, user: normalizedUser };
 		// Store token in localStorage
-		localStorage.setItem("token", data.token);
-		localStorage.setItem("user", JSON.stringify(data.user));
-    
-		return data;
+		localStorage.setItem("token", normalized.token);
+		localStorage.setItem("user", JSON.stringify(normalized.user));
+		return normalized;
 	}
 
 	async register(registerData: RegisterData): Promise<AuthResponse> {
@@ -40,13 +42,15 @@ class AuthService {
 			throw new Error(error.message || "Registration failed");
 		}
 
-		const data = await response.json();
-
+		const data: AuthResponse = await response.json();
+		// Normalize user shape
+		const u = data.user as User;
+		const normalizedUser: User = { ...u, userId: u.userId ?? String(u.id ?? "") };
+		const normalized: AuthResponse = { ...data, user: normalizedUser };
 		// Store token in localStorage
-		localStorage.setItem("token", data.token);
-		localStorage.setItem("user", JSON.stringify(data.user));
-
-		return data;
+		localStorage.setItem("token", normalized.token);
+		localStorage.setItem("user", JSON.stringify(normalized.user));
+		return normalized;
 	}
 
 	logout(): void {

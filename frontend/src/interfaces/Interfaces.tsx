@@ -1,4 +1,5 @@
 export type User = {
+  id?: number;
   userId: string;
   username: string;
   email: string;
@@ -98,4 +99,13 @@ export type BoardPriority = {
   id: number;
   name: string;
   position: number;
+}
+
+export type BoardMember = {
+  id: number;
+  board_id: number;
+  user_id: number;
+  username?: string;
+  role: string;
+  joined_at: string;
 }

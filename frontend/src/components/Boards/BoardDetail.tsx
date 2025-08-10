@@ -5,22 +5,25 @@ import boardService from "../../services/board-service";
 import { AuthContext } from "../../contexts/AuthContext";
 import BoardKanban from "./BoardKanban";
 import { StatusPicker, PriorityPicker } from "./StatusPriorityPickers";
+import { ToastContext } from "../../contexts/ToastContext";
 
 export default function BoardDetail(): React.JSX.Element {
-	const { isLoggedIn } = useContext(AuthContext);
+	const { isLoggedIn, user } = useContext(AuthContext);
+	const { showToast } = useContext(ToastContext);
 	const { boardId } = useParams();
 	const id = Number(boardId);
 	const [board, setBoard] = useState<Board | null>(null);
 	const [tasks, setTasks] = useState<BoardTask[]>([]);
 	const [createStatusName, setCreateStatusName] = useState<string>("");
 	const [loading, setLoading] = useState<boolean>(true);
-	const [error, setError] = useState<string>("");
 	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState("");
 	const [priority, setPriority] = useState<string>("medium");
 	const [editingBoard, setEditingBoard] = useState<boolean>(false);
 	const [boardName, setBoardName] = useState<string>("");
 	const [boardDesc, setBoardDesc] = useState<string>("");
+	const [members, setMembers] = useState<Array<{ id: number; board_id: number; user_id: number; username?: string; role: string; joined_at: string }>>([]);
+	const [newMemberUsername, setNewMemberUsername] = useState<string>("");
 
 	useEffect(() => {
 		(async () => {
@@ -34,9 +37,13 @@ export default function BoardDetail(): React.JSX.Element {
 				setBoardDesc(b.description ?? "");
 				setTasks(t);
 				setCreateStatusName("");
+				try {
+					const m = await boardService.listMembers(id);
+					setMembers(m);
+				} catch { /* ignore if forbidden/not found */ }
 			} catch (e) {
 				const msg = e instanceof Error ? e.message : "Failed to load board";
-				setError(msg);
+				showToast(msg, "error");
 			} finally {
 				setLoading(false);
 			}
@@ -61,7 +68,7 @@ export default function BoardDetail(): React.JSX.Element {
 			setCreateStatusName("");
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : "Failed to create task";
-			setError(msg);
+			showToast(msg, "error");
 		}
 	};
 
@@ -72,7 +79,31 @@ export default function BoardDetail(): React.JSX.Element {
 			setEditingBoard(false);
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : "Failed to update board";
-			setError(msg);
+			showToast(msg, "error");
+		}
+	};
+
+	const onAddMember = async () => {
+		const uname = newMemberUsername.trim();
+		if (!uname) { return; }
+		try {
+			await boardService.addMemberByUsername(id, uname);
+			const m = await boardService.listMembers(id);
+			setMembers(m);
+			setNewMemberUsername("");
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : "Failed to add member";
+			showToast(msg, "error");
+		}
+	};
+
+	const onRemoveMember = async (uid: number) => {
+		try {
+			await boardService.removeMember(id, uid);
+			setMembers(prev => prev.filter(m => m.user_id !== uid));
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : "Failed to remove member";
+			showToast(msg, "error");
 		}
 	};
 
@@ -85,7 +116,7 @@ export default function BoardDetail(): React.JSX.Element {
 			window.location.href = "/boards";
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : "Failed to delete board";
-			setError(msg);
+			showToast(msg, "error");
 		}
 	};
 
@@ -95,9 +126,10 @@ export default function BoardDetail(): React.JSX.Element {
 	if (loading) {
 		return <div className="p-4">Loading...</div>;
 	}
-	if (error) {
-		return <div className="p-4 text-red-600">{error}</div>;
-	}
+
+	const myUserId = Number(user?.userId);
+	const myMembership = members.find(m => m.user_id === myUserId);
+	const canManageMembers = !!board && (myUserId === board.owner_id || (myMembership && (myMembership.role === "owner" || myMembership.role === "admin")));
 
 	return (
 		<div className="p-4 max-w-5xl mx-auto">
@@ -105,7 +137,9 @@ export default function BoardDetail(): React.JSX.Element {
 				<Link className="text-blue-600 hover:underline" to="/boards">← Back to Boards</Link>
 				<div className="space-x-2">
 					<button onClick={() => setEditingBoard(v => !v)} className="px-3 py-1 border rounded">{editingBoard ? "Cancel" : "Edit Board"}</button>
-					<button onClick={onDeleteBoard} className="px-3 py-1 border rounded text-red-600">Delete Board</button>
+					{board && Number(user?.userId) === board.owner_id && (
+						<button onClick={onDeleteBoard} className="px-3 py-1 border rounded text-red-600">Delete Board</button>
+					)}
 				</div>
 			</div>
 
@@ -114,10 +148,34 @@ export default function BoardDetail(): React.JSX.Element {
 					<input className="border px-3 py-2 rounded" value={boardName} onChange={e => setBoardName(e.target.value)} />
 					<textarea className="border px-3 py-2 rounded" value={boardDesc} onChange={e => setBoardDesc(e.target.value)} />
 					<button onClick={onSaveBoard} className="bg-blue-600 text-white px-4 py-2 rounded sm:col-span-2">Save Board</button>
+					<div className="sm:col-span-2 mt-4 border-t pt-4">
+						<h3 className="font-semibold mb-2">Members</h3>
+						<ul className="mb-3 space-y-1">
+							{members.map(m => (
+								<li key={m.id} className="flex justify-between items-center">
+									<span>{m.username ? `@${m.username}` : `User #${m.user_id}`} — {m.role}</span>
+									{canManageMembers && board && m.user_id !== board.owner_id && (
+										<button type="button" className="text-red-600 text-sm" onClick={() => onRemoveMember(m.user_id)}>Remove</button>
+									)}
+								</li>
+							))}
+						</ul>
+						{canManageMembers && (
+							<div className="flex gap-2">
+								<input className="border px-2 py-1 rounded" placeholder="Add by username (e.g. alice)" value={newMemberUsername} onChange={e => setNewMemberUsername(e.target.value)} />
+								<button type="button" className="px-3 py-1 border rounded" onClick={onAddMember}>Add</button>
+							</div>
+						)}
+					</div>
 				</div>
 			) : (
 				<>
-					<h1 className="text-2xl font-bold mb-1">{board?.name}</h1>
+					<div className="flex items-center gap-2 mb-1">
+						<h1 className="text-2xl font-bold">{board?.name}</h1>
+						{board && Number(user?.userId) !== board.owner_id && (
+							<span className="inline-block text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700 border">Shared with me</span>
+						)}
+					</div>
 					<p className="text-gray-700 mb-6">{board?.description}</p>
 				</>
 			)}

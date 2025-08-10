@@ -3,7 +3,7 @@ from datetime import datetime
 import sqlalchemy.exc
 from auth_middleware import token_required
 from flask import Blueprint, jsonify, request
-from models import Board, BoardPriority, BoardStatus, BoardTask, UserDefaults, db
+from models import Board, BoardPriority, BoardStatus, BoardTask, UserDefaults, BoardMember, User, db
 import json
 
 board_bp = Blueprint('boards', __name__)
@@ -31,7 +31,12 @@ def list_boards(current_user):
     List all boards for the current user.
     """
     try:
-        boards = Board.query.filter_by(owner_id=current_user.id).all()
+        # Include boards owned by the user OR where the user is a member
+        member_board_ids = db.session.query(BoardMember.board_id).filter_by(user_id=current_user.id)
+        boards = (Board.query
+                  .filter((Board.owner_id == current_user.id) | (Board.id.in_(member_board_ids)))
+                  .order_by(Board.created_at.desc())
+                  .all())
         return jsonify([
             {
                 'id': b.id,
@@ -60,6 +65,29 @@ def create_board(current_user):
         board = Board(name=name, description=description, owner_id=current_user.id)
         db.session.add(board)
         db.session.commit()
+        # add owner as member (owner role)
+        db.session.add(BoardMember(board_id=board.id, user_id=current_user.id, role='owner'))
+        db.session.flush()
+        # invited users by username or ids
+        invite_usernames = data.get('invite_usernames') or []
+        invite_ids = data.get('invite_user_ids') or []
+        if isinstance(invite_usernames, list):
+            for uname in invite_usernames:
+                if not isinstance(uname, str):
+                    continue
+                u = User.query.filter_by(username=uname).first()
+                if u and u.id != current_user.id:
+                    if not BoardMember.query.filter_by(board_id=board.id, user_id=u.id).first():
+                        db.session.add(BoardMember(board_id=board.id, user_id=u.id, role='member'))
+        if isinstance(invite_ids, list):
+            for uid in invite_ids:
+                try:
+                    uid_int = int(uid)
+                except (TypeError, ValueError):
+                    continue
+                if uid_int != current_user.id:
+                    if not BoardMember.query.filter_by(board_id=board.id, user_id=uid_int).first():
+                        db.session.add(BoardMember(board_id=board.id, user_id=uid_int, role='member'))
         # seed default statuses for the board if none provided
         defaults = data.get('statuses')
         if not defaults:
@@ -70,7 +98,7 @@ def create_board(current_user):
                     parsed = json.loads(uds.default_statuses)
                     if isinstance(parsed, list) and parsed:
                         defaults = [str(x) for x in parsed if isinstance(x, str) and x.strip()]
-                except Exception:
+                except json.JSONDecodeError:
                     defaults = None
         if not defaults:
             defaults = ['todo', 'in_progress', 'review', 'done']
@@ -85,7 +113,7 @@ def create_board(current_user):
                     parsed = json.loads(uds.default_priorities)
                     if isinstance(parsed, list) and parsed:
                         default_priorities = [str(x) for x in parsed if isinstance(x, str) and x.strip()]
-                except Exception:
+                except json.JSONDecodeError:
                     default_priorities = None
         if not default_priorities:
             default_priorities = ['low', 'medium', 'high', 'critical']
@@ -111,8 +139,11 @@ def get_board(current_user, board_id):
     Get a specific board by ID.
     """
     try:
-        board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
+        # Allow if owner or member
+        board = Board.query.filter_by(id=board_id).first()
         if not board:
+            return jsonify({'message': 'Board not found'}), 404
+        if board.owner_id != current_user.id and not BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first():
             return jsonify({'message': 'Board not found'}), 404
         return jsonify({
             'id': board.id,
@@ -140,6 +171,44 @@ def update_board(current_user, board_id):
             board.name = data['name']
         if 'description' in data:
             board.description = data['description']
+        # handle invitations add/remove
+        add_usernames = data.get('add_usernames') or []
+        add_user_ids = data.get('add_user_ids') or []
+        remove_user_ids = data.get('remove_user_ids') or []
+        # Only owner/admin can manage members
+        manager = BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first()
+        if not manager:
+            db.session.add(BoardMember(board_id=board.id, user_id=current_user.id, role='owner' if board.owner_id == current_user.id else 'member'))
+            db.session.flush()
+            manager = BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first()
+        if manager and manager.role in ('owner', 'admin'):
+            if isinstance(add_usernames, list):
+                for uname in add_usernames:
+                    if not isinstance(uname, str):
+                        continue
+                    u = User.query.filter_by(username=uname).first()
+                    if u and not BoardMember.query.filter_by(board_id=board.id, user_id=u.id).first():
+                        db.session.add(BoardMember(board_id=board.id, user_id=u.id, role='member'))
+            if isinstance(add_user_ids, list):
+                for uid in add_user_ids:
+                    try:
+                        uid_int = int(uid)
+                    except (TypeError, ValueError):
+                        continue
+                    if not BoardMember.query.filter_by(board_id=board.id, user_id=uid_int).first():
+                        db.session.add(BoardMember(board_id=board.id, user_id=uid_int, role='member'))
+            if isinstance(remove_user_ids, list):
+                for uid in remove_user_ids:
+                    try:
+                        uid_int = int(uid)
+                    except (TypeError, ValueError):
+                        continue
+                    # prevent removing the owner
+                    if uid_int == board.owner_id:
+                        continue
+                    bm = BoardMember.query.filter_by(board_id=board.id, user_id=uid_int).first()
+                    if bm:
+                        db.session.delete(bm)
         db.session.commit()
         return jsonify({'message': 'Board updated'}), 200
     except sqlalchemy.exc.SQLAlchemyError:
@@ -171,8 +240,10 @@ def list_board_tasks(current_user, board_id):
     List all tasks for a specific board.
     """
     try:
-        board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
+        board = Board.query.filter_by(id=board_id).first()
         if not board:
+            return jsonify({'message': 'Board not found'}), 404
+        if board.owner_id != current_user.id and not BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first():
             return jsonify({'message': 'Board not found'}), 404
         # order tasks by status column order then position then id
         status_order = {s.name: s.position for s in BoardStatus.query.filter_by(board_id=board.id).order_by(BoardStatus.position).all()}
@@ -204,8 +275,10 @@ def create_board_task(current_user, board_id):
     Create a new task in a specific board.
     """
     try:
-        board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
+        board = Board.query.filter_by(id=board_id).first()
         if not board:
+            return jsonify({'message': 'Board not found'}), 404
+        if board.owner_id != current_user.id and not BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first():
             return jsonify({'message': 'Board not found'}), 404
         data = request.get_json() or {}
         title = data.get('title')
@@ -268,8 +341,10 @@ def update_board_task(current_user, board_id, task_id):
     Update a specific task in a board.
     """
     try:
-        board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
+        board = Board.query.filter_by(id=board_id).first()
         if not board:
+            return jsonify({'message': 'Board not found'}), 404
+        if board.owner_id != current_user.id and not BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first():
             return jsonify({'message': 'Board not found'}), 404
         task = BoardTask.query.filter_by(id=task_id, board_id=board.id).first()
         if not task:
@@ -306,8 +381,10 @@ def update_board_task(current_user, board_id, task_id):
 def delete_board_task(current_user, board_id, task_id):
     """Delete a specific task in a board."""
     try:
-        board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
+        board = Board.query.filter_by(id=board_id).first()
         if not board:
+            return jsonify({'message': 'Board not found'}), 404
+        if board.owner_id != current_user.id and not BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first():
             return jsonify({'message': 'Board not found'}), 404
         task = BoardTask.query.filter_by(id=task_id, board_id=board.id).first()
         if not task:
@@ -324,8 +401,10 @@ def delete_board_task(current_user, board_id, task_id):
 def reorder_tasks(current_user, board_id):
     """Reorder tasks within a board. Body: { moves: [{ task_id, to_status, to_position }] }"""
     try:
-        board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
+        board = Board.query.filter_by(id=board_id).first()
         if not board:
+            return jsonify({'message': 'Board not found'}), 404
+        if board.owner_id != current_user.id and not BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first():
             return jsonify({'message': 'Board not found'}), 404
         data = request.get_json() or {}
         moves = data.get('moves', [])
@@ -374,8 +453,10 @@ def reorder_tasks(current_user, board_id):
 @token_required
 def list_statuses(current_user, board_id):
     """List all statuses for a specific board."""
-    board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
+    board = Board.query.filter_by(id=board_id).first()
     if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    if board.owner_id != current_user.id and not BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first():
         return jsonify({'message': 'Board not found'}), 404
     statuses = BoardStatus.query.filter_by(board_id=board.id).order_by(BoardStatus.position, BoardStatus.id).all()
     return jsonify([
@@ -454,8 +535,10 @@ def list_priorities(current_user, board_id):
     """
     List all priorities for a specific board.
     """
-    board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
+    board = Board.query.filter_by(id=board_id).first()
     if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    if board.owner_id != current_user.id and not BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first():
         return jsonify({'message': 'Board not found'}), 404
     priorities = BoardPriority.query.filter_by(board_id=board.id).order_by(BoardPriority.position, BoardPriority.id).all()
     return jsonify([
@@ -527,3 +610,87 @@ def delete_priority(current_user, board_id, priority_id):
     db.session.delete(pr)
     db.session.commit()
     return jsonify({'message': 'Priority deleted'}), 200
+
+# Membership endpoints
+@board_bp.route('/boards/<int:board_id>/members', methods=['GET'])
+@token_required
+def list_board_members(current_user, board_id):
+    board = Board.query.filter_by(id=board_id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    if board.owner_id != current_user.id and not BoardMember.query.filter_by(board_id=board_id, user_id=current_user.id).first():
+        return jsonify({'message': 'Board not found'}), 404
+    members = BoardMember.query.filter_by(board_id=board_id).all()
+    return jsonify([
+        {
+            'id': m.id,
+            'board_id': m.board_id,
+            'user_id': m.user_id,
+            'username': getattr(m.user, 'username', None),
+            'role': m.role,
+            'joined_at': m.joined_at.isoformat()
+        }
+        for m in members
+    ]), 200
+
+@board_bp.route('/boards/<int:board_id>/members', methods=['POST'])
+@token_required
+def add_board_member(current_user, board_id):
+    board = Board.query.filter_by(id=board_id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    manager = BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first()
+    # If current user is the board owner, treat as owner and ensure membership exists
+    if current_user.id == board.owner_id:
+        if not manager:
+            db.session.add(BoardMember(board_id=board.id, user_id=current_user.id, role='owner'))
+            db.session.flush()
+    else:
+        if not manager or manager.role not in ('owner','admin'):
+            return jsonify({'message': 'Insufficient permissions'}), 403
+    data = request.get_json() or {}
+    user_id = data.get('user_id')
+    username = data.get('username')
+    role = data.get('role') or 'member'
+    uid = None
+    if user_id is not None:
+        try:
+            uid = int(user_id)
+        except (TypeError, ValueError):
+            return jsonify({'message': 'Invalid user_id'}), 400
+    elif username:
+        u = User.query.filter_by(username=username).first()
+        if not u:
+            return jsonify({'message': 'User not found'}), 404
+        uid = u.id
+    else:
+        return jsonify({'message': 'user_id or username required'}), 400
+    if BoardMember.query.filter_by(board_id=board.id, user_id=uid).first():
+        return jsonify({'message': 'Already a member'}), 400
+    db.session.add(BoardMember(board_id=board.id, user_id=uid, role=role))
+    db.session.commit()
+    return jsonify({'message': 'Member added'}), 201
+
+@board_bp.route('/boards/<int:board_id>/members/<int:user_id>', methods=['DELETE'])
+@token_required
+def remove_board_member(current_user, board_id, user_id):
+    board = Board.query.filter_by(id=board_id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    manager = BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first()
+    # Allow board owner to manage even if membership row is missing; ensure it's present
+    if current_user.id == board.owner_id:
+        if not manager:
+            db.session.add(BoardMember(board_id=board.id, user_id=current_user.id, role='owner'))
+            db.session.flush()
+    else:
+        if not manager or manager.role not in ('owner','admin'):
+            return jsonify({'message': 'Insufficient permissions'}), 403
+    if user_id == board.owner_id:
+        return jsonify({'message': 'Cannot remove owner'}), 400
+    bm = BoardMember.query.filter_by(board_id=board.id, user_id=user_id).first()
+    if not bm:
+        return jsonify({'message': 'Not a member'}), 404
+    db.session.delete(bm)
+    db.session.commit()
+    return jsonify({'message': 'Member removed'}), 200

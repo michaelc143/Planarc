@@ -20,7 +20,7 @@ class BoardService {
 		return res.json();
 	}
 
-	async createBoard(payload: Pick<Board, "name" | "description">): Promise<Board> {
+	async createBoard(payload: Pick<Board, "name" | "description"> & { invite_usernames?: string[]; invite_user_ids?: number[] }): Promise<Board> {
 		const res = await fetch(`${API_BASE_URL}/boards`, {
 			method: "POST",
 			headers: this.authHeaders(),
@@ -40,7 +40,7 @@ class BoardService {
 		return res.json();
 	}
 
-	async updateBoard(boardId: number, payload: Partial<Pick<Board, "name" | "description">>): Promise<void> {
+	async updateBoard(boardId: number, payload: Partial<Pick<Board, "name" | "description">> & { add_usernames?: string[]; add_user_ids?: number[]; remove_user_ids?: number[] }): Promise<void> {
 		const res = await fetch(`${API_BASE_URL}/boards/${boardId}`, {
 			method: "PUT",
 			headers: this.authHeaders(),
@@ -48,6 +48,47 @@ class BoardService {
 		});
 		if (!res.ok) {
 			throw new Error((await res.json()).message || "Failed to update board");
+		}
+	}
+
+	// Members
+	async listMembers(boardId: number): Promise<Array<{ id: number; board_id: number; user_id: number; username?: string; role: string; joined_at: string }>> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/members`, { headers: this.authHeaders() });
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to fetch members");
+		}
+		return res.json();
+	}
+
+	async addMember(boardId: number, user_id: number, role = "member"): Promise<void> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/members`, {
+			method: "POST",
+			headers: this.authHeaders(),
+			body: JSON.stringify({ user_id, role }),
+		});
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to add member");
+		}
+	}
+
+	async addMemberByUsername(boardId: number, username: string, role = "member"): Promise<void> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/members`, {
+			method: "POST",
+			headers: this.authHeaders(),
+			body: JSON.stringify({ username, role }),
+		});
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to add member");
+		}
+	}
+
+	async removeMember(boardId: number, user_id: number): Promise<void> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/members/${user_id}`, {
+			method: "DELETE",
+			headers: this.authHeaders(),
+		});
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to remove member");
 		}
 	}
 

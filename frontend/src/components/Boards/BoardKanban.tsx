@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import { BoardTask, BoardStatus, BoardPriority } from "../../interfaces/Interfaces";
 import boardService from "../../services/board-service";
+import { ToastContext } from "../../contexts/ToastContext";
 
 type Props = {
 	boardId: number;
@@ -9,6 +10,7 @@ type Props = {
 };
 
 export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.JSX.Element {
+	const { showToast } = useContext(ToastContext);
 	const [statuses, setStatuses] = useState<BoardStatus[]>([]);
 	const [priorities, setPriorities] = useState<BoardPriority[]>([]);
 	const [newStatusName, setNewStatusName] = useState("");
@@ -168,7 +170,7 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 			setTasks(prev => prev.map(t => t.id === editingId ? { ...t, title: editTitle, description: editDesc, priority: editPriority } : t));
 			setEditingId(null);
 		} catch (e) {
-			alert(e instanceof Error ? e.message : "Failed to update task");
+			showToast(e instanceof Error ? e.message : "Failed to update task", "error");
 		}
 	};
 
@@ -178,7 +180,7 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 			await boardService.deleteTask(boardId, taskId);
 			setTasks(prev => prev.filter(t => t.id !== taskId));
 		} catch (e) {
-			alert(e instanceof Error ? e.message : "Failed to delete task");
+			showToast(e instanceof Error ? e.message : "Failed to delete task", "error");
 		}
 	};
 
@@ -192,7 +194,7 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 			setNewStatusName("");
 			notifyStatusesUpdated();
 		} catch (e) {
-			alert(e instanceof Error ? e.message : "Failed to create status");
+			showToast(e instanceof Error ? e.message : "Failed to create status", "error");
 		}
 	};
 	const startEditStatus = (s: BoardStatus) => { setEditingStatusId(s.id); setEditingStatusName(s.name); };
@@ -203,7 +205,7 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 			setEditingStatusId(null);
 			notifyStatusesUpdated();
 		} catch (e) {
-			alert(e instanceof Error ? e.message : "Failed to update status");
+			showToast(e instanceof Error ? e.message : "Failed to update status", "error");
 		}
 	};
 	const moveStatus = async (s: BoardStatus, direction: -1 | 1) => {
@@ -224,7 +226,7 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 			setStatuses(refreshed);
 			notifyStatusesUpdated();
 		} catch (e) {
-			alert(e instanceof Error ? e.message : "Failed to reorder columns");
+			showToast(e instanceof Error ? e.message : "Failed to reorder columns", "error");
 		}
 	};
 	const removeStatus = async (s: BoardStatus) => {
@@ -237,7 +239,7 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 			setTasks(newTasks);
 			notifyStatusesUpdated();
 		} catch (e) {
-			alert(e instanceof Error ? e.message : "Failed to delete status");
+			showToast(e instanceof Error ? e.message : "Failed to delete status", "error");
 		}
 	};
 

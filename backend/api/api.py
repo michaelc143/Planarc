@@ -66,6 +66,23 @@ with app.app_context():
             db.session.commit()
         except Exception:
             db.session.rollback()
+        # ensure board_members table exists
+        try:
+            db.session.execute(text("""
+                CREATE TABLE IF NOT EXISTS board_members (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    board_id INT NOT NULL,
+                    user_id INT NOT NULL,
+                    role VARCHAR(20) DEFAULT 'member',
+                    joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_board_user (board_id, user_id),
+                    CONSTRAINT fk_board_member_board FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE,
+                    CONSTRAINT fk_board_member_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
         # alter priority to VARCHAR for custom priorities
         try:
             db.session.execute(text("ALTER TABLE board_tasks MODIFY COLUMN priority VARCHAR(50) DEFAULT 'medium'"))

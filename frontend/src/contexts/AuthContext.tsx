@@ -19,10 +19,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
 	const initializeAuth = async () => {
 		try {
-			const storedUser = authService.getCurrentUser();
+			let storedUser = authService.getCurrentUser();
 			const token = authService.getToken();
 
 			if (storedUser && token) {
+				// Normalize shape to ensure userId is present
+				if (!storedUser.userId) {
+					storedUser = { ...storedUser, userId: String(storedUser.id ?? "") };
+					localStorage.setItem("user", JSON.stringify(storedUser));
+				}
 				const isValidToken = await authService.validateToken();
 				if (isValidToken) {
 					setUser(storedUser);
@@ -31,7 +36,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 				}
 			}
 		} catch (error) {
-			console.error("Auth initialization error:", error);
 			authService.logout();
 		} finally {
 			setLoading(false);
@@ -46,7 +50,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 			}
 			return !!response;
 		} catch (error) {
-			console.error("Login error:", error);
 			return false;
 		}
 	};
@@ -59,7 +62,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 			}
 			return !!response;
 		} catch (error) {
-			console.error("Registration error:", error);
 			return false;
 		}
 	};

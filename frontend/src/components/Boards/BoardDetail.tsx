@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState, useContext, useRef } from "react";
 import { useParams, Navigate, Link } from "react-router-dom";
 import { BoardTask, Board } from "../../interfaces/Interfaces";
 import boardService from "../../services/board-service";
@@ -25,6 +25,36 @@ export default function BoardDetail(): React.JSX.Element {
 	const [boardDesc, setBoardDesc] = useState<string>("");
 	const [members, setMembers] = useState<Array<{ id: number; board_id: number; user_id: number; username?: string; role: string; joined_at: string }>>([]);
 	const [newMemberUsername, setNewMemberUsername] = useState<string>("");
+	const [showCreateForm, setShowCreateForm] = useState<boolean>(false);
+	const headerRef = useRef<HTMLDivElement | null>(null);
+	const [kanbanHeight, setKanbanHeight] = useState<number>(0);
+
+	// Recompute available viewport height for Kanban when header changes or viewport resizes
+	useEffect(() => {
+		const compute = () => {
+			const rect = headerRef.current?.getBoundingClientRect();
+			const bottom = rect ? rect.bottom : 0;
+			const vh = window.innerHeight || document.documentElement.clientHeight;
+			const available = Math.max(120, vh - bottom);
+			setKanbanHeight(available);
+		};
+		compute();
+		let ro: ResizeObserver | null = null;
+		const RO = (window as unknown as { ResizeObserver?: typeof ResizeObserver }).ResizeObserver;
+		if (typeof RO === "function") {
+			ro = new RO(() => compute());
+			if (headerRef.current) {
+				ro.observe(headerRef.current);
+			}
+		}
+		window.addEventListener("resize", compute);
+		return () => {
+			window.removeEventListener("resize", compute);
+			if (ro) {
+				ro.disconnect();
+			}
+		};
+	}, [editingBoard, showCreateForm, boardName, boardDesc, title, description, estimate, priority, createStatusName]);
 
 	useEffect(() => {
 		(async () => {
@@ -135,7 +165,7 @@ export default function BoardDetail(): React.JSX.Element {
 	const canManageMembers = !!board && (myUserId === board.owner_id || (myMembership && (myMembership.role === "owner" || myMembership.role === "admin")));
 
 	return (
-		<div className="p-4 max-w-5xl mx-auto">
+		<div className="p-4 max-w-screen-2xl mx-auto min-h-screen flex flex-col">
 			<div className="flex items-center justify-between mb-4">
 				<Link className="text-blue-600 hover:underline" to="/boards">← Back to Boards</Link>
 				<div className="space-x-2">
@@ -183,54 +213,71 @@ export default function BoardDetail(): React.JSX.Element {
 				</>
 			)}
 
-			<form onSubmit={onCreateTask} className="mb-6 bg-white border rounded p-4 shadow-sm">
-				<div className="grid gap-3 grid-cols-1 sm:grid-cols-4">
-					<div className="sm:col-span-2">
-						<label className="block text-sm text-gray-700 mb-1">Title</label>
-						<input
-							type="text"
-							className="w-full border px-3 py-2 rounded"
-							placeholder="Task title"
-							value={title}
-							onChange={(e) => setTitle(e.target.value)}
-							required
-						/>
-					</div>
-					<div>
-						<label className="block text-sm text-gray-700 mb-1">Priority</label>
-						<PriorityPicker boardId={id} value={priority} onChange={setPriority} />
-					</div>
-					<div>
-						<label className="block text-sm text-gray-700 mb-1">Status</label>
-						<StatusPicker boardId={id} value={createStatusName} onChange={setCreateStatusName} />
-					</div>
-					<div className="sm:col-span-4">
-						<label className="block text-sm text-gray-700 mb-1">Description</label>
-						<textarea
-							className="w-full border px-3 py-2 rounded"
-							placeholder="Description"
-							value={description}
-							onChange={(e) => setDescription(e.target.value)}
-						/>
-					</div>
-					<div className="sm:col-span-1">
-						<label className="block text-sm text-gray-700 mb-1">Estimate (points)</label>
-						<input
-							type="number"
-							min={0}
-							className="w-full border px-3 py-2 rounded"
-							placeholder="e.g. 3"
-							value={estimate}
-							onChange={(e) => setEstimate(e.target.value)}
-						/>
-					</div>
-					<div className="sm:col-span-4 flex justify-end">
-						<button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Add Task</button>
-					</div>
-				</div>
-			</form>
+			{/* Header block we measure for dynamic height calculations */}
+			<div className="mb-4" ref={headerRef}>
+				<button
+					type="button"
+					className="bg-blue-600 text-white px-4 py-2 rounded"
+					aria-expanded={showCreateForm}
+					aria-controls="new-task-form"
+					onClick={() => setShowCreateForm(v => !v)}
+				>
+					{showCreateForm ? "Hide New Task" : "New Task"}
+				</button>
+			</div>
 
-			<BoardKanban boardId={id} tasks={tasks} setTasks={setTasks} />
+			{showCreateForm && (
+				<form onSubmit={onCreateTask} className="mb-6 bg-white border rounded p-4 shadow-sm" id="new-task-form">
+					<div className="grid gap-3 grid-cols-1 sm:grid-cols-4">
+						<div className="sm:col-span-2">
+							<label className="block text-sm text-gray-700 mb-1">Title</label>
+							<input
+								type="text"
+								className="w-full border px-3 py-2 rounded"
+								placeholder="Task title"
+								value={title}
+								onChange={(e) => setTitle(e.target.value)}
+								required
+							/>
+						</div>
+						<div>
+							<label className="block text-sm text-gray-700 mb-1">Priority</label>
+							<PriorityPicker boardId={id} value={priority} onChange={setPriority} />
+						</div>
+						<div>
+							<label className="block text-sm text-gray-700 mb-1">Status</label>
+							<StatusPicker boardId={id} value={createStatusName} onChange={setCreateStatusName} />
+						</div>
+						<div className="sm:col-span-4">
+							<label className="block text-sm text-gray-700 mb-1">Description</label>
+							<textarea
+								className="w-full border px-3 py-2 rounded"
+								placeholder="Description"
+								value={description}
+								onChange={(e) => setDescription(e.target.value)}
+							/>
+						</div>
+						<div className="sm:col-span-1">
+							<label className="block text-sm text-gray-700 mb-1">Estimate (points)</label>
+							<input
+								type="number"
+								min={0}
+								className="w-full border px-3 py-2 rounded"
+								placeholder="e.g. 3"
+								value={estimate}
+								onChange={(e) => setEstimate(e.target.value)}
+							/>
+						</div>
+						<div className="sm:col-span-4 flex justify-end">
+							<button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Add Task</button>
+						</div>
+					</div>
+				</form>
+			)}
+
+			<div className="min-h-0" style={{ height: kanbanHeight ? `${kanbanHeight}px` : undefined }}>
+				<BoardKanban boardId={id} tasks={tasks} setTasks={setTasks} />
+			</div>
 		</div>
 	);
 }

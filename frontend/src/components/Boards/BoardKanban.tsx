@@ -134,6 +134,28 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 	const estimateInputRef = useRef<HTMLInputElement | null>(null);
 	const [focusEstimateNext, setFocusEstimateNext] = useState<number | null>(null);
 
+	// Track whether to show top/bottom scroll shadows for each column's task list
+	const [scrollShadows, setScrollShadows] = useState<Record<number, { top: boolean; bottom: boolean }>>({});
+	const listRefs = useRef<Record<number, HTMLDivElement | null>>({});
+	const setShadowFor = (sid: number, el: HTMLElement | null) => {
+		if (!el) { return; }
+		const top = el.scrollTop > 0;
+		const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+		setScrollShadows(prev => {
+			const cur = prev[sid];
+			if (cur && cur.top === top && cur.bottom === bottom) { return prev; }
+			return { ...prev, [sid]: { top, bottom } };
+		});
+	};
+
+	// Initialize scroll shadows after render (and when tasks/statuses change sizes)
+	useEffect(() => {
+		statuses.forEach(s => {
+			const el = listRefs.current[s.id] as unknown as HTMLElement | null;
+			if (el) { setShadowFor(s.id, el); }
+		});
+	}, [statuses, tasks.length]);
+
 	useEffect(() => {
 		if (editingId != null && focusEstimateNext === editingId && estimateInputRef.current) {
 			estimateInputRef.current.focus();
@@ -262,99 +284,114 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 	};
 
 	return (
-		<div className="space-y-3">
+		<div className="space-y-3 h-full flex flex-col min-h-0">
 			<div className="flex gap-2 items-center">
 				<input className="border px-2 py-1 rounded" placeholder="Add status (column)" value={newStatusName} onChange={e => setNewStatusName(e.target.value)} />
 				<button className="px-3 py-1 border rounded" onClick={addStatus}>Add</button>
 			</div>
-			<div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-				{statuses.map((s) => (
-					<div key={s.id} className="bg-gray-100 rounded p-2 min-h-[200px]" onDragOver={onDragOver} onDrop={onDropCard(s.name, (columns[s.name]?.length ?? 0))}>
-						<div className="font-semibold capitalize mb-2 flex items-center justify-between">
-							{editingStatusId === s.id ? (
-								<div className="flex gap-2 items-center w-full">
-									<input className="border px-2 py-1 rounded w-full" value={editingStatusName} onChange={e => setEditingStatusName(e.target.value)} />
-									<button className="px-2 py-1 border rounded" onClick={() => saveStatus(s)}>Save</button>
-									<button className="px-2 py-1 border rounded" onClick={() => setEditingStatusId(null)}>Cancel</button>
-								</div>
-							) : (
-								<>
-									<span>{s.name.replace("_", " ")}</span>
-									<div className="text-xs space-x-2">
-										<button className="underline" onClick={() => moveStatus(s, -1)}>◀</button>
-										<button className="underline" onClick={() => moveStatus(s, 1)}>▶</button>
-										<button className="underline" onClick={() => startEditStatus(s)}>Rename</button>
-										<button className="underline text-red-600" onClick={() => removeStatus(s)}>Delete</button>
+			<div className="overflow-x-auto min-h-0 flex-1">
+				<div className="flex flex-nowrap items-stretch gap-4 pb-2 min-h-0 h-full">
+					{statuses.map((s) => (
+						<div key={s.id} className="bg-gray-100 rounded p-2 w-72 shrink-0 flex flex-col h-full min-h-screen" onDragOver={onDragOver} onDrop={onDropCard(s.name, (columns[s.name]?.length ?? 0))}>
+							<div className="font-semibold capitalize mb-2 flex items-center justify-between">
+								{editingStatusId === s.id ? (
+									<div className="flex gap-2 items-center w-full">
+										<input className="border px-2 py-1 rounded w-full" value={editingStatusName} onChange={e => setEditingStatusName(e.target.value)} />
+										<button className="px-2 py-1 border rounded" onClick={() => saveStatus(s)}>Save</button>
+										<button className="px-2 py-1 border rounded" onClick={() => setEditingStatusId(null)}>Cancel</button>
 									</div>
-								</>
-							)}
-						</div>
-						<div className="space-y-2">
-							{(columns[s.name] ?? []).map((t, idx) => (
-								<div
-									key={t.id}
-									draggable={editingId !== t.id}
-									onDragStart={onDragStart(t)}
-									onDragOver={onDragOver}
-									onDrop={onDropCard(s.name, idx)}
-									className={`bg-white border rounded p-2 shadow-sm ${editingId === t.id ? "relative z-10" : ""}`}
-								>
-									{editingId === t.id ? (
-										<div className="space-y-2">
-											<input className="border w-full px-2 py-1 rounded" value={editTitle} onChange={e => setEditTitle(e.target.value)} />
-											<textarea className="border w-full px-2 py-1 rounded" value={editDesc} onChange={e => setEditDesc(e.target.value)} />
-											<div className="flex flex-wrap gap-2">
-												<select className="border px-2 py-1 rounded w-full sm:w-auto" value={editPriority} onChange={e => setEditPriority(e.target.value) }>
-													{(priorities.length ? priorities : [
-														{ id: -1, name: "low", position: 0 },
-														{ id: -2, name: "medium", position: 1 },
-														{ id: -3, name: "high", position: 2 },
-														{ id: -4, name: "critical", position: 3 },
-													]).map(p => (
-														<option key={p.id} value={p.name}>{p.name}</option>
-													))}
-												</select>
-												<select className="border px-2 py-1 rounded capitalize w-full sm:w-auto" value={editStatus} onChange={e => setEditStatus(e.target.value) }>
-													{statuses.map(st => <option key={st.id} value={st.name}>{st.name.replace("_", " ")}</option>)}
-												</select>
-												<div className="w-full sm:w-auto">
-													<label htmlFor={`estimate-${t.id}`} className="block text-xs text-gray-700 mb-1">Estimate (points)</label>
-													<input ref={estimateInputRef} id={`estimate-${t.id}`} className="border px-2 py-1 rounded w-full sm:w-24" type="number" min={0} value={editEstimate} onChange={e => setEditEstimate(e.target.value)} />
-												</div>
-											</div>
-											<div className="flex gap-2">
-												<button className="bg-blue-600 text-white px-2 py-1 rounded" onClick={saveEdit}>Save</button>
-												<button className="px-2 py-1 rounded border" onClick={cancelEdit}>Cancel</button>
-											</div>
+								) : (
+									<>
+										<span>{s.name.replace("_", " ")}</span>
+										<div className="text-xs space-x-2">
+											<button className="underline" onClick={() => moveStatus(s, -1)}>◀</button>
+											<button className="underline" onClick={() => moveStatus(s, 1)}>▶</button>
+											<button className="underline" onClick={() => startEditStatus(s)}>Rename</button>
+											<button className="underline text-red-600" onClick={() => removeStatus(s)}>Delete</button>
 										</div>
-									) : (
-										<div className="cursor-move">
-											<div className="font-medium flex items-center justify-between">
-												<span>{t.title} <span className="text-xs text-gray-500">[{t.priority}]</span></span>
-												<div className="text-xs space-x-2">
-													<button className="underline" onClick={() => startEdit(t)}>Edit</button>
-													<button className="underline text-red-600" onClick={() => deleteTask(t.id)}>Delete</button>
+									</>
+								)}
+							</div>
+							<div className="relative flex-1 min-h-0">
+								<div
+									className="space-y-2 overflow-y-auto h-full pr-1"
+									onScroll={(e) => setShadowFor(s.id, e.currentTarget)}
+									ref={(el) => { listRefs.current[s.id] = el; }}
+								>
+									{(columns[s.name] ?? []).map((t, idx) => (
+										<div
+											key={t.id}
+											draggable={editingId !== t.id}
+											onDragStart={onDragStart(t)}
+											onDragOver={onDragOver}
+											onDrop={onDropCard(s.name, idx)}
+											className={`bg-white border rounded p-2 shadow-sm ${editingId === t.id ? "relative z-10" : ""}`}
+										>
+											{editingId === t.id ? (
+												<div className="space-y-2">
+													<input className="border w-full px-2 py-1 rounded" value={editTitle} onChange={e => setEditTitle(e.target.value)} />
+													<textarea className="border w-full px-2 py-1 rounded" value={editDesc} onChange={e => setEditDesc(e.target.value)} />
+													<div className="flex flex-wrap gap-2">
+														<select className="border px-2 py-1 rounded w-full sm:w-auto" value={editPriority} onChange={e => setEditPriority(e.target.value) }>
+															{(priorities.length ? priorities : [
+																{ id: -1, name: "low", position: 0 },
+																{ id: -2, name: "medium", position: 1 },
+																{ id: -3, name: "high", position: 2 },
+																{ id: -4, name: "critical", position: 3 },
+															]).map(p => (
+																<option key={p.id} value={p.name}>{p.name}</option>
+															))}
+														</select>
+														<select className="border px-2 py-1 rounded capitalize w-full sm:w-auto" value={editStatus} onChange={e => setEditStatus(e.target.value) }>
+															{statuses.map(st => <option key={st.id} value={st.name}>{st.name.replace("_", " ")}</option>)}
+														</select>
+														<div className="w-full sm:w-auto">
+															<label htmlFor={`estimate-${t.id}`} className="block text-xs text-gray-700 mb-1">Estimate (points)</label>
+															<input ref={estimateInputRef} id={`estimate-${t.id}`} className="border px-2 py-1 rounded w-full sm:w-24" type="number" min={0} value={editEstimate} onChange={e => setEditEstimate(e.target.value)} />
+														</div>
+													</div>
+													<div className="flex gap-2">
+														<button className="bg-blue-600 text-white px-2 py-1 rounded" onClick={saveEdit}>Save</button>
+														<button className="px-2 py-1 rounded border" onClick={cancelEdit}>Cancel</button>
+													</div>
 												</div>
-											</div>
-											<div className="text-sm text-gray-600">{t.description}</div>
-											{typeof t.estimate === "number" && (
-												<div className="text-xs text-gray-500 mt-1">
+											) : (
+												<div className="cursor-move">
+													<div className="font-medium flex items-center justify-between">
+														<span>{t.title} <span className="text-xs text-gray-500">[{t.priority}]</span></span>
+														<div className="text-xs space-x-2">
+															<button className="underline" onClick={() => startEdit(t)}>Edit</button>
+															<button className="underline text-red-600" onClick={() => deleteTask(t.id)}>Delete</button>
+														</div>
+													</div>
+													<div className="text-sm text-gray-600">{t.description}</div>
+													{typeof t.estimate === "number" && (
+														<div className="text-xs text-gray-500 mt-1">
 													Estimate: {t.estimate}
-													<button
-														className="ml-2 underline text-blue-600"
-														onClick={() => { setFocusEstimateNext(t.id); startEdit(t); }}
-													>
+															<button
+																className="ml-2 underline text-blue-600"
+																onClick={() => { setFocusEstimateNext(t.id); startEdit(t); }}
+															>
 														Change
-													</button>
+															</button>
+														</div>
+													)}
 												</div>
 											)}
 										</div>
-									)}
+									))}
 								</div>
-							))}
+								{/* scroll shadows */}
+								{scrollShadows[s.id]?.top && (
+									<div className="pointer-events-none absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-gray-200/80 to-transparent rounded-t" />
+								)}
+								{scrollShadows[s.id]?.bottom && (
+									<div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-gray-200/80 to-transparent rounded-b" />
+								)}
+							</div>
 						</div>
-					</div>
-				))}
+					))}
+				</div>
 			</div>
 		</div>
 	);

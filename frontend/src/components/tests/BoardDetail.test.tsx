@@ -73,6 +73,8 @@ describe("BoardDetail", () => {
 		renderWithAuth(<BoardDetail />);
 
 		await waitFor(() => expect(screen.getByText("Board A")).toBeInTheDocument());
+		// Open the collapsible New Task form
+		await userEvent.click(screen.getByRole("button", { name: /New Task/i }));
 		// statuses are loaded async for the create form
 		await screen.findByRole("button", { name: /Add Task/i });
 		expect(screen.getByTestId("kanban")).toHaveTextContent("Tasks: 1");
@@ -94,6 +96,6 @@ describe("BoardDetail", () => {
 		await waitFor(() => expect(boardService.createTask).toHaveBeenCalled());
 		// ensure estimate persisted in payload
 		expect((boardService.createTask as jest.Mock).mock.calls[0][1]).toEqual(expect.objectContaining({ estimate: 5 }));
-		expect(screen.getByTestId("kanban")).toHaveTextContent("Tasks: 2");
+		await waitFor(() => expect(screen.getByTestId("kanban")).toHaveTextContent("Tasks: 2"));
 	});
 });

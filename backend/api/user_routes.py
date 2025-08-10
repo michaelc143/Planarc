@@ -10,7 +10,7 @@ user_bp = Blueprint('users', __name__)
 
 @user_bp.route('/users/<int:user_id>', methods=['GET'])
 @token_required
-def get_user(user_id) -> Tuple[Response, int]:
+def get_user(current_user, user_id) -> Tuple[Response, int]:  # pylint: disable=unused-argument
     """ Get a user by ID """
     try:
         user: User | None = User.query.get(user_id)
@@ -42,9 +42,15 @@ def delete_user(current_user, username) -> Tuple[Response, int]:
         if current_user.id != user_to_delete.id and getattr(current_user, 'role', 'user') != 'admin':
             return jsonify({'message': 'Insufficient permissions'}), 403
 
-        # Delete the user and commit the changes
-        db.session.delete(user_to_delete)
-        db.session.commit()
+        # Delete the user using a bulk delete to avoid loading related tables
+        try:
+            deleted = db.session.query(User).filter(User.id == user_to_delete.id).delete(synchronize_session=False)
+            db.session.commit()
+            if deleted == 0:
+                return jsonify({'message': 'User not found'}), 404
+        except sqlalchemy.exc.SQLAlchemyError:
+            db.session.rollback()
+            return jsonify({'message': 'Internal server error'}), 500
 
         return jsonify({'message': 'User deleted successfully'}), 200
     except sqlalchemy.exc.SQLAlchemyError:
@@ -146,7 +152,7 @@ def set_user_defaults(current_user) -> Tuple[Response, int]:
         def sanitize(lst, max_len=50, max_items=20) -> list[str]:
             if not isinstance(lst, list):
                 return []
-            out = []
+            out: list[str] = []
             for x in lst:
                 if isinstance(x, str):
                     s = x.strip()
@@ -159,10 +165,15 @@ def set_user_defaults(current_user) -> Tuple[Response, int]:
         priorities_s: list[str] = sanitize(priorities)
         uds: UserDefaults | None = UserDefaults.query.filter_by(user_id=current_user.id).first()
         if not uds:
-            uds = UserDefaults(user_id=current_user.id, default_statuses=statuses_s, default_priorities=priorities_s)
+            uds = UserDefaults(
+                user_id=current_user.id,
+                default_statuses=json.dumps(statuses_s),
+                default_priorities=json.dumps(priorities_s),
+            )
             db.session.add(uds)
-        uds.default_statuses = statuses_s
-        uds.default_priorities = priorities_s
+        else:
+            uds.default_statuses = json.dumps(statuses_s)
+            uds.default_priorities = json.dumps(priorities_s)
         db.session.commit()
         return jsonify({'message': 'Defaults saved'}), 200
     except sqlalchemy.exc.SQLAlchemyError:

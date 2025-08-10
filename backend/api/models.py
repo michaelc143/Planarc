@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List, Optional
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import String, Integer, Text, ForeignKey, DateTime, Date, ARRAY
+from sqlalchemy import String, Integer, Text, ForeignKey, DateTime, Date
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 db = SQLAlchemy()
@@ -45,7 +45,7 @@ class Board(db.Model):
     __tablename__: str = 'boards'
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[str] = mapped_column(Text)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     owner_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
@@ -71,8 +71,9 @@ class UserDefaults(db.Model):
     __tablename__: str = 'user_defaults'
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), nullable=False, unique=True)
-    default_statuses: Mapped[List[str]] = mapped_column(ARRAY(String(50)))  # JSON encoded list of strings
-    default_priorities: Mapped[List[str]] = mapped_column(ARRAY(String(50)))  # JSON encoded list of strings
+    # Store as JSON-encoded TEXT to work across MySQL/SQLite
+    default_statuses: Mapped[str] = mapped_column(Text)
+    default_priorities: Mapped[str] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
 
     user: Mapped['User'] = relationship('User', backref=db.backref('defaults', lazy=True, cascade="all, delete-orphan"))
@@ -150,14 +151,14 @@ class BoardTask(db.Model):
     __tablename__: str = 'board_tasks'
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[str] = mapped_column(Text)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default='todo')  # free-form tied to BoardStatus.name
     # priority becomes a free-form string tied to BoardPriority.name
     priority: Mapped[str] = mapped_column(String(50), default='medium')
     board_id: Mapped[int] = mapped_column(ForeignKey('boards.id', ondelete='CASCADE'))
-    assigned_to: Mapped[int] = mapped_column(ForeignKey('users.id'))
+    assigned_to: Mapped[Optional[int]] = mapped_column(ForeignKey('users.id'), nullable=True)
     created_by: Mapped[int] = mapped_column(ForeignKey('users.id'))
-    due_date: Mapped[datetime] = mapped_column(Date)
+    due_date: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
     position: Mapped[int] = mapped_column(Integer, default=0)  # Order within its status column
     created_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())

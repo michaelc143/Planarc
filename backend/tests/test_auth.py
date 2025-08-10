@@ -25,7 +25,10 @@ def create_test_app() -> Flask:
     # Use in-memory SQLite by default to keep tests fast and hermetic.
     # You can override with TEST_DATABASE_URI (e.g., a dedicated MySQL DB) if desired.
     os.environ.setdefault("JWT_SECRET_KEY", "test-secret")
-    database_uri = os.getenv("TEST_DATABASE_URI", "sqlite:///:memory:")
+    database_uri = os.getenv(
+        "TEST_DATABASE_URI",
+        f"sqlite:///" + os.path.join(BACKEND_DIR, "tests", "test_auth.sqlite3"),
+    )
 
     app = Flask(__name__)
     app.config.update(

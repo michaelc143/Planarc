@@ -72,9 +72,12 @@ def create_board(current_user) -> Tuple[Response, int]:
         board = Board(name=name, description=description, owner_id=current_user.id)
         db.session.add(board)
         db.session.commit()
-        # add owner as member (owner role)
-        db.session.add(BoardMember(board_id=board.id, user_id=current_user.id, role='owner', ))
-        db.session.flush()
+        # add owner as member (owner role) and commit so membership is visible in subsequent requests
+        try:
+            db.session.add(BoardMember(board_id=board.id, user_id=current_user.id, role='owner'))
+            db.session.commit()
+        except sqlalchemy.exc.SQLAlchemyError:
+            db.session.rollback()
         # invited users by username or ids
         invite_usernames: list[str] = data.get('invite_usernames') or []
         invite_ids: list[int] = data.get('invite_user_ids') or []
@@ -109,8 +112,12 @@ def create_board(current_user) -> Tuple[Response, int]:
                     defaults = None
         if not defaults:
             defaults = ['todo', 'in_progress', 'review', 'done']
-        for idx, s in enumerate(defaults):
-            db.session.add(BoardStatus(board_id=board.id, name=s, position=idx))
+        try:
+            for idx, s in enumerate(defaults):
+                db.session.add(BoardStatus(board_id=board.id, name=s, position=idx))
+            db.session.commit()
+        except sqlalchemy.exc.SQLAlchemyError:
+            db.session.rollback()
         # seed default priorities for the board if none provided
         default_priorities: list[str] | None = data.get('priorities')
         if not default_priorities:
@@ -124,9 +131,12 @@ def create_board(current_user) -> Tuple[Response, int]:
                     default_priorities = None
         if not default_priorities:
             default_priorities = ['low', 'medium', 'high', 'critical']
-        for idx, p in enumerate(default_priorities):
-            db.session.add(BoardPriority(board_id=board.id, name=p, position=idx))
-        db.session.commit()
+        try:
+            for idx, p in enumerate(default_priorities):
+                db.session.add(BoardPriority(board_id=board.id, name=p, position=idx))
+            db.session.commit()
+        except sqlalchemy.exc.SQLAlchemyError:
+            db.session.rollback()
         return jsonify({
             'id': board.id,
             'name': board.name,
@@ -170,7 +180,7 @@ def update_board(current_user, board_id) -> Tuple[Response, int]:
     Update a specific board by ID.
     """
     try:
-        board: Board | None = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
+        board: Board | None = Board.query.filter_by(id=board_id).first()
         if not board:
             return jsonify({'message': 'Board not found'}), 404
         data: dict = request.get_json() or {}
@@ -184,11 +194,12 @@ def update_board(current_user, board_id) -> Tuple[Response, int]:
         remove_user_ids: list[int] = data.get('remove_user_ids') or []
         # Only owner/admin can manage members
         manager: BoardMember | None = BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first()
-        if not manager:
-            db.session.add(BoardMember(board_id=board.id, user_id=current_user.id, role='owner' if board.owner_id == current_user.id else 'member'))
+        if not manager and board.owner_id == current_user.id:
+            # ensure owner membership exists
+            db.session.add(BoardMember(board_id=board.id, user_id=current_user.id, role='owner'))
             db.session.flush()
-            manager: BoardMember | None = BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first()
-        if manager and manager.role in ('owner', 'admin'):
+            manager = BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first()
+        if (board.owner_id == current_user.id) or (manager and manager.role in ('owner', 'admin')):
             if isinstance(add_usernames, list):
                 for uname in add_usernames:
                     if not isinstance(uname, str):
@@ -285,7 +296,8 @@ def create_board_task(current_user, board_id) -> Tuple[Response, int]:
         board: Board | None = Board.query.filter_by(id=board_id).first()
         if not board:
             return jsonify({'message': 'Board not found'}), 404
-        if board.owner_id != current_user.id and not BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first():
+        manager: BoardMember | None = BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first()
+        if not (board.owner_id == current_user.id or manager):
             return jsonify({'message': 'Board not found'}), 404
         data: dict = request.get_json() or {}
         title: str | None = data.get('title')

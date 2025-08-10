@@ -2,35 +2,35 @@
 import os
 import sqlalchemy.exc
 import jwt
-from flask import Blueprint, jsonify, request
+from typing import Tuple
+from flask import Blueprint, Response, jsonify, request
 from models import db, User
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import select
 
 auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/login', methods=['POST'])
-def login():
+def login() -> Tuple[Response, int]:
     """ Log in a user """
     try:
         # Parse the JSON request
-        data = request.get_json()
-
-        # Get the username and password from the request
-        username = data.get('username')
-        password = data.get('password')
+        data = request.get_json() or {}
+        username: str = (data.get('username') or "").strip()
+        password: str = (data.get('password') or "").strip()
 
         if not username or not password:
             return jsonify({'message': 'Username and password required'}), 400
 
         # Find the user in the database by username
-        user = User.query.filter_by(username=username).first()
+        user: User | None = db.session.scalar(select(User).where(getattr(User, 'username') == username))
 
         # If the user doesn't exist or the password is wrong, return an error
         if user is None or not check_password_hash(user.password, password):
             return jsonify({'message': 'Invalid email or password'}), 401
 
         # Generate JWT token
-        token = jwt.encode({
+        token: str = jwt.encode({
             'user_id': user.id
         }, os.getenv('JWT_SECRET_KEY', 'default-secret'), algorithm='HS256')
 
@@ -50,24 +50,24 @@ def login():
         return jsonify({'message': 'Internal server error'}), 500
 
 @auth_bp.route('/register', methods=['POST'])
-def register():
+def register() -> Tuple[Response, int]:
     """ Register a new user """
     try:
         # Parse the JSON request
         data = request.get_json()
 
         # Get the required fields from the request
-        username = data.get('username')
-        password = data.get('password')
-        email = data.get('email')
+        username: str = data.get('username')
+        password: str = data.get('password')
+        email: str = data.get('email')
 
         if not all([username, password, email]):
             return jsonify({'message': 'Username, email, and password are required'}), 400
 
         # Check if a user with the provided username or email already exists
-        existing_user = User.query.filter(
-            (User.username == username) | (User.email == email)
-        ).first()
+        existing_user: User | None = db.session.scalar(
+            select(User).where((getattr(User, 'username') == username) | (getattr(User, 'email') == email))
+        )
 
         if existing_user is not None:
             return jsonify({'message': 'Username or email already taken'}), 409
@@ -76,12 +76,12 @@ def register():
         hashed_password = generate_password_hash(password)
 
         # Create a new user and save it to the database
-        user = User(username=username, password=hashed_password, email=email)
+        user: User = User(username=username, password=hashed_password, email=email)
         db.session.add(user)
         db.session.commit()
 
         # Generate JWT token
-        token = jwt.encode({
+        token: str = jwt.encode({
             'user_id': user.id
         }, os.getenv('JWT_SECRET_KEY', 'default-secret'), algorithm='HS256')
 
@@ -101,9 +101,9 @@ def register():
         return jsonify({'message': 'Internal server error'}), 500
 
 @auth_bp.route('/validate', methods=['GET'])
-def validate_token():
+def validate_token() -> Tuple[Response, int]:
     """ Validate JWT token """
-    token = request.headers.get('Authorization')
+    token: str | None = request.headers.get('Authorization')
     if not token:
         return jsonify({'message': 'No token provided'}), 401
 
@@ -113,10 +113,10 @@ def validate_token():
             token = token[7:]
 
         payload = jwt.decode(token, os.getenv('JWT_SECRET_KEY', 'default-secret'), algorithms=['HS256'])
-        user = User.query.get(payload['user_id'])
+        user: User | None = User.query.get(payload['user_id'])
 
         if not user:
-            return jsonify({'message': 'Invalid token'}), 401
+            return jsonify({'message': 'User not found'}), 401
 
         return jsonify({'valid': True, 'user_id': user.id}), 200
     except jwt.ExpiredSignatureError:

@@ -1,16 +1,29 @@
 """ Models for the app backend """
+from __future__ import annotations
+from typing import List, Optional
+from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import String, Integer, Text, ForeignKey, DateTime, Date, ARRAY
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 db = SQLAlchemy()
 
 class User(db.Model):
-    """ User Model """
-    __tablename__ = 'users'
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique=True, nullable=False)
-    password = db.Column(db.String(255), nullable=False)
-    email = db.Column(db.String(255), unique=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    """ User Model
+        {
+            id: int,
+            username: str,
+            email: str,
+            dateJoined: datetime,
+            role: str
+        }
+    """
+    __tablename__: str = 'users'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    password: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp())
 
     def __init__(self, username, password, email):
         self.username = username
@@ -19,89 +32,174 @@ class User(db.Model):
 
 # New models for Boards and Tasks on Boards
 class Board(db.Model):
-    """ Board Model """
-    __tablename__ = 'boards'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), nullable=False)
-    description = db.Column(db.Text)
-    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
-    updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+    """ Board Model
+        {
+            id: int,
+            name: str,
+            description: str,
+            owner_id: int,
+            created_at: datetime,
+            updated_at: datetime
+        }
+    """
+    __tablename__: str = 'boards'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text)
+    owner_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
 
-    owner = db.relationship('User', backref=db.backref('boards', lazy=True))
+    owner: Mapped['User'] = relationship('User', backref=db.backref('boards', lazy=True))
+
+    def __init__(self, name, description, owner_id):
+        self.name = name
+        self.description = description
+        self.owner_id = owner_id
 
 class UserDefaults(db.Model):
-    """ Per-user defaults for new boards """
-    __tablename__ = 'user_defaults'
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, unique=True)
-    default_statuses = db.Column(db.Text)  # JSON encoded list of strings
-    default_priorities = db.Column(db.Text)  # JSON encoded list of strings
-    updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+    """ Per-user defaults for new boards
+        {
+            id: int,
+            user_id: int,
+            default_statuses: list[str],
+            default_priorities: list[str],
+            created_at: datetime,
+            updated_at: datetime
+        }
+    """
+    __tablename__: str = 'user_defaults'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), nullable=False, unique=True)
+    default_statuses: Mapped[List[str]] = mapped_column(ARRAY(String(50)))  # JSON encoded list of strings
+    default_priorities: Mapped[List[str]] = mapped_column(ARRAY(String(50)))  # JSON encoded list of strings
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
 
-    user = db.relationship('User', backref=db.backref('defaults', lazy=True, cascade="all, delete-orphan"))
+    user: Mapped['User'] = relationship('User', backref=db.backref('defaults', lazy=True, cascade="all, delete-orphan"))
+
+    def __init__(self, user_id, default_statuses, default_priorities):
+        self.user_id = user_id
+        self.default_statuses = default_statuses
+        self.default_priorities = default_priorities
 
 class BoardStatus(db.Model):
-    """ Custom statuses per board """
-    __tablename__ = 'board_statuses'
-    id = db.Column(db.Integer, primary_key=True)
-    board_id = db.Column(db.Integer, db.ForeignKey('boards.id', ondelete='CASCADE'), nullable=False)
-    name = db.Column(db.String(50), nullable=False)
-    position = db.Column(db.Integer, default=0)  # order of columns
+    """ Custom statuses per board
+        {
+            id: int,
+            board_id: int,
+            name: str
+        }
+    """
+    __tablename__: str = 'board_statuses'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    board_id: Mapped[int] = mapped_column(ForeignKey('boards.id', ondelete='CASCADE'), nullable=False)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, default=0)  # order of columns
 
-    __table_args__ = (
+    __table_args__: tuple = (
         db.UniqueConstraint('board_id', 'name', name='uq_board_status_name'),
     )
 
-    board = db.relationship('Board', backref=db.backref('statuses', lazy=True, cascade="all, delete-orphan"))
+    board: Mapped['Board'] = relationship('Board', backref=db.backref('statuses', lazy=True, cascade="all, delete-orphan"))
+
+    def __init__(self, board_id, name, position):
+        self.board_id = board_id
+        self.name = name
+        self.position = position
 
 class BoardPriority(db.Model):
-    """ Custom priorities per board """
-    __tablename__ = 'board_priorities'
-    id = db.Column(db.Integer, primary_key=True)
-    board_id = db.Column(db.Integer, db.ForeignKey('boards.id', ondelete='CASCADE'), nullable=False)
-    name = db.Column(db.String(50), nullable=False)
-    position = db.Column(db.Integer, default=0)  # order of priorities
+    """ Custom priorities per board
+        {
+            id: int,
+            board_id: int,
+            name: str
+        }
+    """
+    __tablename__: str = 'board_priorities'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    board_id: Mapped[int] = mapped_column(ForeignKey('boards.id', ondelete='CASCADE'), nullable=False)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, default=0)  # order of priorities
 
-    __table_args__ = (
+    __table_args__: tuple = (
         db.UniqueConstraint('board_id', 'name', name='uq_board_priority_name'),
     )
 
-    board = db.relationship('Board', backref=db.backref('priorities', lazy=True, cascade="all, delete-orphan"))
+    board: Mapped['Board'] = relationship('Board', backref=db.backref('priorities', lazy=True, cascade="all, delete-orphan"))
+
+    def __init__(self, board_id, name, position):
+        self.board_id = board_id
+        self.name = name
+        self.position = position
 
 class BoardTask(db.Model):
-    """ Task Model scoped to a Board """
-    __tablename__ = 'board_tasks'
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(255), nullable=False)
-    description = db.Column(db.Text)
-    status = db.Column(db.String(50), default='todo')  # free-form tied to BoardStatus.name
+    """ Task Model scoped to a Board
+        {
+            id: int,
+            board_id: int,
+            title: str,
+            description: str,
+            assigned_to: int,
+            created_by: int,
+            due_date: date,
+            position: int,
+            created_at: datetime,
+            updated_at: datetime
+        }
+    """
+    __tablename__: str = 'board_tasks'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(50), default='todo')  # free-form tied to BoardStatus.name
     # priority becomes a free-form string tied to BoardPriority.name
-    priority = db.Column(db.String(50), default='medium')
-    board_id = db.Column(db.Integer, db.ForeignKey('boards.id', ondelete='CASCADE'))
-    assigned_to = db.Column(db.Integer, db.ForeignKey('users.id'))
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
-    due_date = db.Column(db.Date)
-    position = db.Column(db.Integer, default=0)  # Order within its status column
-    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
-    updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+    priority: Mapped[str] = mapped_column(String(50), default='medium')
+    board_id: Mapped[int] = mapped_column(ForeignKey('boards.id', ondelete='CASCADE'))
+    assigned_to: Mapped[int] = mapped_column(ForeignKey('users.id'))
+    created_by: Mapped[int] = mapped_column(ForeignKey('users.id'))
+    due_date: Mapped[datetime] = mapped_column(Date)
+    position: Mapped[int] = mapped_column(Integer, default=0)  # Order within its status column
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
 
-    board = db.relationship('Board', backref=db.backref('tasks', lazy=True, cascade="all, delete-orphan"))
-    assignee = db.relationship('User', foreign_keys=[assigned_to], backref=db.backref('assigned_board_tasks', lazy=True))
-    creator = db.relationship('User', foreign_keys=[created_by], backref=db.backref('created_board_tasks', lazy=True))
+    board: Mapped['Board'] = relationship('Board', backref=db.backref('tasks', lazy=True, cascade="all, delete-orphan"))
+    assignee: Mapped['User'] = relationship('User', foreign_keys=[assigned_to], backref=db.backref('assigned_board_tasks', lazy=True))
+    creator: Mapped['User'] = relationship('User', foreign_keys=[created_by], backref=db.backref('created_board_tasks', lazy=True))
+
+    def __init__(self, title, description, assigned_to, created_by, due_date, position, status, priority, board_id):
+        self.title = title
+        self.description = description
+        self.assigned_to = assigned_to
+        self.created_by = created_by
+        self.due_date = due_date
+        self.position = position
+        self.status = status
+        self.priority = priority
+        self.board_id = board_id
 
 class BoardMember(db.Model):
-    """ Membership for boards """
+    """ Membership for boards
+        {
+            id: int,
+            board_id: int,
+            user_id: int
+        }
+    """
     __tablename__ = 'board_members'
-    id = db.Column(db.Integer, primary_key=True)
-    board_id = db.Column(db.Integer, db.ForeignKey('boards.id', ondelete='CASCADE'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    role = db.Column(db.String(20), default='member')  # owner|admin|member|viewer
-    joined_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    board_id: Mapped[int] = mapped_column(ForeignKey('boards.id', ondelete='CASCADE'), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    role: Mapped[str] = mapped_column(String(20), default='member')  # owner|admin|member|viewer
+    joined_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=db.func.current_timestamp())
 
     __table_args__ = (
         db.UniqueConstraint('board_id', 'user_id', name='uq_board_user'),
     )
 
-    board = db.relationship('Board', backref=db.backref('members', lazy=True, cascade="all, delete-orphan"))
-    user = db.relationship('User', backref=db.backref('board_memberships', lazy=True, cascade="all, delete-orphan"))
+    board: Mapped['Board'] = relationship('Board', backref=db.backref('members', lazy=True, cascade="all, delete-orphan"))
+    user: Mapped['User'] = relationship('User', backref=db.backref('board_memberships', lazy=True, cascade="all, delete-orphan"))
+    def __init__(self, board_id, user_id, role):
+        self.board_id = board_id
+        self.user_id = user_id
+        self.role = role

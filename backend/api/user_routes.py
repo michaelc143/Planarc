@@ -1,18 +1,19 @@
 """ User management routes for the API """
-import sqlalchemy.exc
-from flask import Blueprint, jsonify, request
-from models import db, User, UserDefaults
 import json
+from typing import Tuple
+import sqlalchemy.exc
+from flask import Blueprint, Response, jsonify, request
+from models import db, User, UserDefaults
 from auth_middleware import token_required
 
 user_bp = Blueprint('users', __name__)
 
 @user_bp.route('/users/<int:user_id>', methods=['GET'])
 @token_required
-def get_user(user_id):
+def get_user(user_id) -> Tuple[Response, int]:
     """ Get a user by ID """
     try:
-        user = User.query.get(user_id)
+        user: User | None = User.query.get(user_id)
         if user is None:
             return jsonify({'message': 'User not found'}), 404
 
@@ -28,11 +29,11 @@ def get_user(user_id):
 
 @user_bp.route('/users/<string:username>', methods=['DELETE'])
 @token_required
-def delete_user(current_user, username):
+def delete_user(current_user, username) -> Tuple[Response, int]:
     """ Delete a user by username """
     try:
         # Only allow admins or the user themselves to delete
-        user_to_delete = User.query.filter_by(username=username).first()
+        user_to_delete: User | None = User.query.filter_by(username=username).first()
 
         if user_to_delete is None:
             return jsonify({'message': 'User not found'}), 404
@@ -51,17 +52,17 @@ def delete_user(current_user, username):
 
 @user_bp.route('/users/<int:user_id>/username', methods=['PUT'])
 @token_required
-def edit_username(current_user, user_id):
+def edit_username(current_user, user_id) -> Tuple[Response, int]:
     """ Edit a user's username """
     try:
-        data = request.get_json()
-        new_username = data.get('username')
+        data: dict = request.get_json()
+        new_username: str | None = data.get('username')
 
         if not new_username:
             return jsonify({'message': 'Username is required'}), 400
 
         # Find the user by ID
-        user = User.query.get(user_id)
+        user: User | None = User.query.get(user_id)
 
         if user is None:
             return jsonify({'message': 'User not found'}), 404
@@ -94,7 +95,7 @@ def edit_username(current_user, user_id):
 
 @user_bp.route('/users/profile', methods=['GET'])
 @token_required
-def get_current_user_profile(current_user):
+def get_current_user_profile(current_user) -> Tuple[Response, int]:
     """ Get current user's profile """
     try:
         return jsonify({
@@ -109,25 +110,25 @@ def get_current_user_profile(current_user):
 
 @user_bp.route('/users/defaults', methods=['GET'])
 @token_required
-def get_user_defaults(current_user):
+def get_user_defaults(current_user) -> Tuple[Response, int]:
     """Get current user's default statuses and priorities for new boards"""
     try:
-        uds = UserDefaults.query.filter_by(user_id=current_user.id).first()
-        statuses = []
-        priorities = []
+        uds: UserDefaults | None = UserDefaults.query.filter_by(user_id=current_user.id).first()
+        statuses: list[str] = []
+        priorities: list[str] = []
         if uds and uds.default_statuses:
             try:
-                parsed = json.loads(uds.default_statuses)
+                parsed: list | None = json.loads(uds.default_statuses)
                 if isinstance(parsed, list):
                     statuses = [str(x) for x in parsed]
-            except Exception:
+            except json.JSONDecodeError:
                 statuses = []
         if uds and uds.default_priorities:
             try:
-                parsed = json.loads(uds.default_priorities)
+                parsed: list | None = json.loads(uds.default_priorities)
                 if isinstance(parsed, list):
                     priorities = [str(x) for x in parsed]
-            except Exception:
+            except json.JSONDecodeError:
                 priorities = []
         return jsonify({ 'statuses': statuses, 'priorities': priorities }), 200
     except sqlalchemy.exc.SQLAlchemyError:
@@ -135,14 +136,14 @@ def get_user_defaults(current_user):
 
 @user_bp.route('/users/defaults', methods=['PUT'])
 @token_required
-def set_user_defaults(current_user):
+def set_user_defaults(current_user) -> Tuple[Response, int]:
     """Set current user's default statuses and priorities for new boards"""
     try:
         payload = request.get_json() or {}
-        statuses = payload.get('statuses')
-        priorities = payload.get('priorities')
+        statuses: list[str] | None = payload.get('statuses')
+        priorities: list[str] | None = payload.get('priorities')
         # sanitize lists
-        def sanitize(lst, max_len=50, max_items=20):
+        def sanitize(lst, max_len=50, max_items=20) -> list[str]:
             if not isinstance(lst, list):
                 return []
             out = []
@@ -154,14 +155,14 @@ def set_user_defaults(current_user):
                 if len(out) >= max_items:
                     break
             return out
-        statuses_s = sanitize(statuses)
-        priorities_s = sanitize(priorities)
-        uds = UserDefaults.query.filter_by(user_id=current_user.id).first()
+        statuses_s: list[str] = sanitize(statuses)
+        priorities_s: list[str] = sanitize(priorities)
+        uds: UserDefaults | None = UserDefaults.query.filter_by(user_id=current_user.id).first()
         if not uds:
-            uds = UserDefaults(user_id=current_user.id)
+            uds = UserDefaults(user_id=current_user.id, default_statuses=statuses_s, default_priorities=priorities_s)
             db.session.add(uds)
-        uds.default_statuses = json.dumps(statuses_s)
-        uds.default_priorities = json.dumps(priorities_s)
+        uds.default_statuses = statuses_s
+        uds.default_priorities = priorities_s
         db.session.commit()
         return jsonify({'message': 'Defaults saved'}), 200
     except sqlalchemy.exc.SQLAlchemyError:

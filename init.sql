@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS boards (
     name VARCHAR(255) NOT NULL,
     description TEXT,
     owner_id INT NOT NULL,
+    background_color VARCHAR(20) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (owner_id) REFERENCES users(id)
@@ -52,6 +53,7 @@ CREATE TABLE IF NOT EXISTS board_statuses (
     board_id INT NOT NULL,
     name VARCHAR(50) NOT NULL,
     position INT DEFAULT 0,
+    color VARCHAR(20) NULL,
     UNIQUE KEY uq_board_status_name (board_id, name),
     CONSTRAINT fk_status_board FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
 );

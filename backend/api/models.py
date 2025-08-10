@@ -49,13 +49,16 @@ class Board(db.Model):
     owner_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+    # Optional background color for the board UI (e.g. hex like #ffffff)
+    background_color: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None)
 
     owner: Mapped['User'] = relationship('User', backref=db.backref('boards', lazy=True))
 
-    def __init__(self, name, description, owner_id):
+    def __init__(self, name, description, owner_id, background_color: Optional[str] = None):
         self.name = name
         self.description = description
         self.owner_id = owner_id
+        self.background_color = background_color
 
 class UserDefaults(db.Model):
     """ Per-user defaults for new boards
@@ -96,6 +99,8 @@ class BoardStatus(db.Model):
     board_id: Mapped[int] = mapped_column(ForeignKey('boards.id', ondelete='CASCADE'), nullable=False)
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     position: Mapped[int] = mapped_column(Integer, default=0)  # order of columns
+    # Optional background color per status column (e.g. hex like #f3f4f6)
+    color: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None)
 
     __table_args__: tuple = (
         db.UniqueConstraint('board_id', 'name', name='uq_board_status_name'),
@@ -103,10 +108,11 @@ class BoardStatus(db.Model):
 
     board: Mapped['Board'] = relationship('Board', backref=db.backref('statuses', lazy=True, cascade="all, delete-orphan"))
 
-    def __init__(self, board_id, name, position):
+    def __init__(self, board_id, name, position, color: Optional[str] = None):
         self.board_id = board_id
         self.name = name
         self.position = position
+        self.color = color
 
 class BoardPriority(db.Model):
     """ Custom priorities per board

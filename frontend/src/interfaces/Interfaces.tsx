@@ -72,6 +72,7 @@ export type Board = {
   owner_id: number;
   created_at: string;
   updated_at?: string;
+  background_color?: string;
 }
 
 export type BoardTask = {
@@ -95,6 +96,7 @@ export type BoardStatus = {
   id: number;
   name: string;
   position: number;
+  color?: string;
 }
 
 export type BoardPriority = {

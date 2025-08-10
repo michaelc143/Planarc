@@ -109,7 +109,7 @@ class BoardRouteTests(unittest.TestCase):
 
     def test_create_list_get_board(self) -> None:
         """Test creating, listing, and getting a board."""
-        token, uid = self._register("owner", "owner@example.com")
+        token, _ = self._register("owner", "owner@example.com")
         # create board
         r = self.client.post(
             "/boards",
@@ -129,7 +129,7 @@ class BoardRouteTests(unittest.TestCase):
 
     def test_update_board_and_members(self) -> None:
         """Test updating a board and managing members."""
-        owner_token, owner_id = self._register("owner2", "owner2@example.com")
+        owner_token, _ = self._register("owner2", "owner2@example.com")
         member_token, member_id = self._register("member", "member@example.com")
         # owner creates board
         r = self.client.post(

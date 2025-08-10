@@ -23,6 +23,7 @@ export default function BoardDetail(): React.JSX.Element {
 	const [editingBoard, setEditingBoard] = useState<boolean>(false);
 	const [boardName, setBoardName] = useState<string>("");
 	const [boardDesc, setBoardDesc] = useState<string>("");
+	const [boardBg, setBoardBg] = useState<string>("");
 	const [members, setMembers] = useState<Array<{ id: number; board_id: number; user_id: number; username?: string; role: string; joined_at: string }>>([]);
 	const [newMemberUsername, setNewMemberUsername] = useState<string>("");
 	const [showCreateForm, setShowCreateForm] = useState<boolean>(false);
@@ -66,6 +67,7 @@ export default function BoardDetail(): React.JSX.Element {
 				setBoard(b);
 				setBoardName(b.name);
 				setBoardDesc(b.description ?? "");
+				setBoardBg(b.background_color ?? "");
 				setTasks(t);
 				setCreateStatusName("");
 				try {
@@ -107,8 +109,8 @@ export default function BoardDetail(): React.JSX.Element {
 
 	const onSaveBoard = async () => {
 		try {
-			await boardService.updateBoard(id, { name: boardName, description: boardDesc });
-			setBoard(prev => prev ? { ...prev, name: boardName, description: boardDesc } : prev);
+			await boardService.updateBoard(id, { name: boardName, description: boardDesc, background_color: boardBg || undefined });
+			setBoard(prev => prev ? { ...prev, name: boardName, description: boardDesc, background_color: boardBg || undefined } : prev);
 			setEditingBoard(false);
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : "Failed to update board";
@@ -165,121 +167,128 @@ export default function BoardDetail(): React.JSX.Element {
 	const canManageMembers = !!board && (myUserId === board.owner_id || (myMembership && (myMembership.role === "owner" || myMembership.role === "admin")));
 
 	return (
-		<div className="p-4 max-w-screen-2xl mx-auto min-h-screen flex flex-col">
-			<div className="flex items-center justify-between mb-4">
-				<Link className="text-blue-600 hover:underline" to="/boards">← Back to Boards</Link>
-				<div className="space-x-2">
-					{board && (
-						<Link to={`/boards/${id}/burndown`} className="px-3 py-1 border rounded">Burndown</Link>
-					)}
-					<button onClick={() => setEditingBoard(v => !v)} className="px-3 py-1 border rounded">{editingBoard ? "Cancel" : "Edit Board"}</button>
-					{board && Number(user?.userId) === board.owner_id && (
-						<button onClick={onDeleteBoard} className="px-3 py-1 border rounded text-red-600">Delete Board</button>
-					)}
+		<div className="p-4 max-w-screen-2xl mx-auto min-h-screen">
+			<div className="border rounded-xl shadow-lg p-4 sm:p-6 bg-white" style={{ backgroundColor: board?.background_color || undefined }}>
+				<div className="flex items-center justify-between mb-4">
+					<Link className="text-blue-600 hover:underline" to="/boards">← Back to Boards</Link>
+					<div className="space-x-2">
+						{board && (
+							<Link to={`/boards/${id}/burndown`} className="px-3 py-1 border rounded">Burndown</Link>
+						)}
+						<button onClick={() => setEditingBoard(v => !v)} className="px-3 py-1 border rounded">{editingBoard ? "Cancel" : "Edit Board"}</button>
+						{board && Number(user?.userId) === board.owner_id && (
+							<button onClick={onDeleteBoard} className="px-3 py-1 border rounded text-red-600">Delete Board</button>
+						)}
+					</div>
 				</div>
-			</div>
 
-			{editingBoard ? (
-				<div className="mb-6 grid gap-2 grid-cols-1 sm:grid-cols-2">
-					<input className="border px-3 py-2 rounded" value={boardName} onChange={e => setBoardName(e.target.value)} />
-					<textarea className="border px-3 py-2 rounded" value={boardDesc} onChange={e => setBoardDesc(e.target.value)} />
-					<button onClick={onSaveBoard} className="bg-blue-600 text-white px-4 py-2 rounded sm:col-span-2">Save Board</button>
-					<div className="sm:col-span-2 mt-4 border-t pt-4">
-						<h3 className="font-semibold mb-2">Members</h3>
-						<ul className="mb-3 space-y-1">
-							{members.map(m => (
-								<li key={m.id} className="flex justify-between items-center">
-									<span>{m.username ? `@${m.username}` : `User #${m.user_id}`} — {m.role}</span>
-									{canManageMembers && board && m.user_id !== board.owner_id && (
-										<button type="button" className="text-red-600 text-sm" onClick={() => onRemoveMember(m.user_id)}>Remove</button>
-									)}
-								</li>
-							))}
-						</ul>
-						{canManageMembers && (
-							<div className="flex gap-2">
-								<input className="border px-2 py-1 rounded" placeholder="Add by username (e.g. alice)" value={newMemberUsername} onChange={e => setNewMemberUsername(e.target.value)} />
-								<button type="button" className="px-3 py-1 border rounded" onClick={onAddMember}>Add</button>
+				{editingBoard ? (
+					<div className="mb-6 grid gap-2 grid-cols-1 sm:grid-cols-2">
+						<input className="border px-3 py-2 rounded" value={boardName} onChange={e => setBoardName(e.target.value)} />
+						<textarea className="border px-3 py-2 rounded" value={boardDesc} onChange={e => setBoardDesc(e.target.value)} />
+						<div className="flex items-center gap-2">
+							<label className="text-sm text-gray-700">Board background</label>
+							<input type="color" className="border rounded w-12 h-10 p-0" value={boardBg || "#ffffff"} onChange={e => setBoardBg(e.target.value)} />
+							<input className="border px-2 py-1 rounded flex-1" placeholder="#ffffff or css color" value={boardBg} onChange={e => setBoardBg(e.target.value)} />
+						</div>
+						<button onClick={onSaveBoard} className="bg-blue-600 text-white px-4 py-2 rounded sm:col-span-2">Save Board</button>
+						<div className="sm:col-span-2 mt-4 border-t pt-4">
+							<h3 className="font-semibold mb-2">Members</h3>
+							<ul className="mb-3 space-y-1">
+								{members.map(m => (
+									<li key={m.id} className="flex justify-between items-center">
+										<span>{m.username ? `@${m.username}` : `User #${m.user_id}`} — {m.role}</span>
+										{canManageMembers && board && m.user_id !== board.owner_id && (
+											<button type="button" className="text-red-600 text-sm" onClick={() => onRemoveMember(m.user_id)}>Remove</button>
+										)}
+									</li>
+								))}
+							</ul>
+							{canManageMembers && (
+								<div className="flex gap-2">
+									<input className="border px-2 py-1 rounded" placeholder="Add by username (e.g. alice)" value={newMemberUsername} onChange={e => setNewMemberUsername(e.target.value)} />
+									<button type="button" className="px-3 py-1 border rounded" onClick={onAddMember}>Add</button>
+								</div>
+							)}
+						</div>
+					</div>
+				) : (
+					<>
+						<div className="flex items-center gap-2 mb-1">
+							<h1 className="text-2xl font-bold">{board?.name}</h1>
+							{board && Number(user?.userId) !== board.owner_id && (
+								<span className="inline-block text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700 border">Shared with me</span>
+							)}
+						</div>
+						<p className="text-gray-700 mb-6">{board?.description}</p>
+					</>
+				)}
+
+				{/* Header block we measure for dynamic height calculations */}
+				<div className="mb-4" ref={headerRef}>
+					<button
+						type="button"
+						className="bg-blue-600 text-white px-4 py-2 rounded"
+						aria-expanded={showCreateForm}
+						aria-controls="new-task-form"
+						onClick={() => setShowCreateForm(v => !v)}
+					>
+						{showCreateForm ? "Hide New Task" : "New Task"}
+					</button>
+				</div>
+
+				{showCreateForm && (
+					<form onSubmit={onCreateTask} className="mb-6 bg-white border rounded p-4 shadow-sm" id="new-task-form">
+						<div className="grid gap-3 grid-cols-1 sm:grid-cols-4">
+							<div className="sm:col-span-2">
+								<label className="block text-sm text-gray-700 mb-1">Title</label>
+								<input
+									type="text"
+									className="w-full border px-3 py-2 rounded"
+									placeholder="Task title"
+									value={title}
+									onChange={(e) => setTitle(e.target.value)}
+									required
+								/>
 							</div>
-						)}
-					</div>
+							<div>
+								<label className="block text-sm text-gray-700 mb-1">Priority</label>
+								<PriorityPicker boardId={id} value={priority} onChange={setPriority} />
+							</div>
+							<div>
+								<label className="block text-sm text-gray-700 mb-1">Status</label>
+								<StatusPicker boardId={id} value={createStatusName} onChange={setCreateStatusName} />
+							</div>
+							<div className="sm:col-span-4">
+								<label className="block text-sm text-gray-700 mb-1">Description</label>
+								<textarea
+									className="w-full border px-3 py-2 rounded"
+									placeholder="Description"
+									value={description}
+									onChange={(e) => setDescription(e.target.value)}
+								/>
+							</div>
+							<div className="sm:col-span-1">
+								<label className="block text-sm text-gray-700 mb-1">Estimate (points)</label>
+								<input
+									type="number"
+									min={0}
+									className="w-full border px-3 py-2 rounded"
+									placeholder="e.g. 3"
+									value={estimate}
+									onChange={(e) => setEstimate(e.target.value)}
+								/>
+							</div>
+							<div className="sm:col-span-4 flex justify-end">
+								<button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Add Task</button>
+							</div>
+						</div>
+					</form>
+				)}
+
+				<div className="min-h-0" style={{ height: kanbanHeight ? `${kanbanHeight}px` : undefined }}>
+					<BoardKanban boardId={id} tasks={tasks} setTasks={setTasks} />
 				</div>
-			) : (
-				<>
-					<div className="flex items-center gap-2 mb-1">
-						<h1 className="text-2xl font-bold">{board?.name}</h1>
-						{board && Number(user?.userId) !== board.owner_id && (
-							<span className="inline-block text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700 border">Shared with me</span>
-						)}
-					</div>
-					<p className="text-gray-700 mb-6">{board?.description}</p>
-				</>
-			)}
-
-			{/* Header block we measure for dynamic height calculations */}
-			<div className="mb-4" ref={headerRef}>
-				<button
-					type="button"
-					className="bg-blue-600 text-white px-4 py-2 rounded"
-					aria-expanded={showCreateForm}
-					aria-controls="new-task-form"
-					onClick={() => setShowCreateForm(v => !v)}
-				>
-					{showCreateForm ? "Hide New Task" : "New Task"}
-				</button>
-			</div>
-
-			{showCreateForm && (
-				<form onSubmit={onCreateTask} className="mb-6 bg-white border rounded p-4 shadow-sm" id="new-task-form">
-					<div className="grid gap-3 grid-cols-1 sm:grid-cols-4">
-						<div className="sm:col-span-2">
-							<label className="block text-sm text-gray-700 mb-1">Title</label>
-							<input
-								type="text"
-								className="w-full border px-3 py-2 rounded"
-								placeholder="Task title"
-								value={title}
-								onChange={(e) => setTitle(e.target.value)}
-								required
-							/>
-						</div>
-						<div>
-							<label className="block text-sm text-gray-700 mb-1">Priority</label>
-							<PriorityPicker boardId={id} value={priority} onChange={setPriority} />
-						</div>
-						<div>
-							<label className="block text-sm text-gray-700 mb-1">Status</label>
-							<StatusPicker boardId={id} value={createStatusName} onChange={setCreateStatusName} />
-						</div>
-						<div className="sm:col-span-4">
-							<label className="block text-sm text-gray-700 mb-1">Description</label>
-							<textarea
-								className="w-full border px-3 py-2 rounded"
-								placeholder="Description"
-								value={description}
-								onChange={(e) => setDescription(e.target.value)}
-							/>
-						</div>
-						<div className="sm:col-span-1">
-							<label className="block text-sm text-gray-700 mb-1">Estimate (points)</label>
-							<input
-								type="number"
-								min={0}
-								className="w-full border px-3 py-2 rounded"
-								placeholder="e.g. 3"
-								value={estimate}
-								onChange={(e) => setEstimate(e.target.value)}
-							/>
-						</div>
-						<div className="sm:col-span-4 flex justify-end">
-							<button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Add Task</button>
-						</div>
-					</div>
-				</form>
-			)}
-
-			<div className="min-h-0" style={{ height: kanbanHeight ? `${kanbanHeight}px` : undefined }}>
-				<BoardKanban boardId={id} tasks={tasks} setTasks={setTasks} />
 			</div>
 		</div>
 	);

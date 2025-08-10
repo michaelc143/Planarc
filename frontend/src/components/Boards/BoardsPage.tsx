@@ -13,6 +13,7 @@ export default function BoardsPage(): React.JSX.Element {
 	const [newBoardName, setNewBoardName] = useState<string>("");
 	const [newBoardDesc, setNewBoardDesc] = useState<string>("");
 	const [inviteUsernames, setInviteUsernames] = useState<string>("");
+	const [newBoardBg, setNewBoardBg] = useState<string>("#ffffff");
 
 	useEffect(() => {
 		(async () => {
@@ -31,11 +32,12 @@ export default function BoardsPage(): React.JSX.Element {
 	const onCreateBoard = async (e: React.FormEvent) => {
 		e.preventDefault();
 		try {
-			const created = await boardService.createBoard({ name: newBoardName, description: newBoardDesc, invite_usernames: inviteUsernames.split(",").map((s) => s.trim()).filter(Boolean) });
+			const created = await boardService.createBoard({ name: newBoardName, description: newBoardDesc, invite_usernames: inviteUsernames.split(",").map((s) => s.trim()).filter(Boolean), background_color: newBoardBg || undefined });
 			setBoards((prev) => [created, ...prev]);
 			setNewBoardName("");
 			setNewBoardDesc("");
 			setInviteUsernames("");
+			setNewBoardBg("#ffffff");
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : "Failed to create board";
 			showToast(msg, "error");
@@ -85,11 +87,16 @@ export default function BoardsPage(): React.JSX.Element {
 					value={inviteUsernames}
 					onChange={(e) => setInviteUsernames(e.target.value)}
 				/>
+				<div className="flex items-center gap-2">
+					<label className="text-sm text-gray-700">Board background</label>
+					<input type="color" className="border rounded w-12 h-10 p-0" value={newBoardBg} onChange={(e) => setNewBoardBg(e.target.value)} />
+					<input className="border px-2 py-1 rounded flex-1" placeholder="#ffffff or css color" value={newBoardBg} onChange={(e) => setNewBoardBg(e.target.value)} />
+				</div>
 				<button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Create Board</button>
 			</form>
 			<ul className="space-y-3">
 				{boards.map((b) => (
-					<li key={b.id} className="border rounded p-3">
+					<li key={b.id} className="border rounded p-3" style={{ backgroundColor: b.background_color || undefined }}>
 						<div className="flex items-start justify-between gap-2">
 							<div className="font-semibold">
 								<Link className="text-blue-600 hover:underline" to={`/boards/${b.id}`}>

@@ -46,13 +46,14 @@ def list_boards(current_user) -> Tuple[Response, int]:
         boards = db.session.scalars(stmt).all()
         return jsonify([
             {
-                'id': b.id,
-                'name': b.name,
-                'description': b.description or '',
-                'owner_id': b.owner_id,
-                'created_at': b.created_at.isoformat(),
-                'updated_at': b.updated_at.isoformat() if b.updated_at else None
-            } for b in boards
+                'id': board.id,
+                'name': board.name,
+                'description': board.description or '',
+                'owner_id': board.owner_id,
+                'created_at': board.created_at.isoformat(),
+                'updated_at': board.updated_at.isoformat() if board.updated_at else None,
+                'background_color': getattr(board, 'background_color', None)
+            } for board in boards
         ]), 200
     except sqlalchemy.exc.SQLAlchemyError:
         return jsonify({'message': 'Internal server error'}), 500
@@ -69,7 +70,8 @@ def create_board(current_user) -> Tuple[Response, int]:
         description: str | None = data.get('description')
         if not name:
             return jsonify({'message': 'Name is required'}), 400
-        board = Board(name=name, description=description, owner_id=current_user.id)
+        background_color: str | None = data.get('background_color')
+        board = Board(name=name, description=description, owner_id=current_user.id, background_color=background_color)
         db.session.add(board)
         db.session.commit()
         # add owner as member (owner role) and commit so membership is visible in subsequent requests
@@ -82,58 +84,59 @@ def create_board(current_user) -> Tuple[Response, int]:
         invite_usernames: list[str] = data.get('invite_usernames') or []
         invite_ids: list[int] = data.get('invite_user_ids') or []
         if isinstance(invite_usernames, list):
-            for uname in invite_usernames:
-                if not isinstance(uname, str):
+            for username_to_invite in invite_usernames:
+                if not isinstance(username_to_invite, str):
                     continue
-                u: User | None = User.query.filter_by(username=uname).first()
-                if u and u.id != current_user.id:
-                    if not BoardMember.query.filter_by(board_id=board.id, user_id=u.id).first():
-                        db.session.add(BoardMember(board_id=board.id, user_id=u.id, role='member'))
+                user_to_invite: User | None = User.query.filter_by(username=username_to_invite).first()
+                if user_to_invite and user_to_invite.id != current_user.id:
+                    if not BoardMember.query.filter_by(board_id=board.id, user_id=user_to_invite.id).first():
+                        db.session.add(BoardMember(board_id=board.id, user_id=user_to_invite.id, role='member'))
         if isinstance(invite_ids, list):
-            for uid in invite_ids:
+            for user_to_invite_id in invite_ids:
                 try:
-                    uid_int: int = int(uid)
+                    user_to_invite_id_int: int = int(user_to_invite_id)
                 except (TypeError, ValueError):
                     continue
-                if uid_int != current_user.id:
-                    if not BoardMember.query.filter_by(board_id=board.id, user_id=uid_int).first():
-                        db.session.add(BoardMember(board_id=board.id, user_id=uid_int, role='member'))
+                if user_to_invite_id_int != current_user.id:
+                    if not BoardMember.query.filter_by(board_id=board.id, user_id=user_to_invite_id_int).first():
+                        db.session.add(BoardMember(board_id=board.id, user_id=user_to_invite_id_int, role='member'))
         # seed default statuses for the board if none provided
-        defaults: list[str] | None = data.get('statuses')
-        if not defaults:
+        default_statuses: list[str] | None = data.get('statuses')
+        if not default_statuses:
             # try per-user defaults
             user_defaults: UserDefaults | None = UserDefaults.query.filter_by(user_id=current_user.id).first()
             if user_defaults and user_defaults.default_statuses:
                 try:
-                    parsed: list[str] | None = json.loads(user_defaults.default_statuses)
-                    if isinstance(parsed, list) and parsed:
-                        defaults = [str(x) for x in parsed if isinstance(x, str) and x.strip()]
+                    parsed_user_default_statuses: list[str] | None = json.loads(user_defaults.default_statuses)
+                    if isinstance(parsed_user_default_statuses, list) and parsed_user_default_statuses:
+                        default_statuses = [str(x) for x in parsed_user_default_statuses if isinstance(x, str) and x.strip()]
                 except json.JSONDecodeError:
-                    defaults = None
-        if not defaults:
-            defaults = ['todo', 'in_progress', 'review', 'done']
+                    default_statuses = None
+        if not default_statuses:
+            default_statuses = ['todo', 'in_progress', 'review', 'done']
         try:
-            for idx, s in enumerate(defaults):
+            for idx, s in enumerate(default_statuses):
                 db.session.add(BoardStatus(board_id=board.id, name=s, position=idx))
             db.session.commit()
         except sqlalchemy.exc.SQLAlchemyError:
             db.session.rollback()
+
         # seed default priorities for the board if none provided
         default_priorities: list[str] | None = data.get('priorities')
         if not default_priorities:
             user_defaults: UserDefaults | None = UserDefaults.query.filter_by(user_id=current_user.id).first()
             if user_defaults and user_defaults.default_priorities:
                 try:
-                    parsed: list[str] | None = json.loads(user_defaults.default_priorities)
-                    if isinstance(parsed, list) and parsed:
-                        default_priorities: list[str] | None = [str(x) for x in parsed if isinstance(x, str) and x.strip()]
+                    parsed_user_default_priorities: list[str] | None = json.loads(user_defaults.default_priorities)
+                    if isinstance(parsed_user_default_priorities, list) and parsed_user_default_priorities:
+                        default_priorities: list[str] | None = [str(x) for x in parsed_user_default_priorities if isinstance(x, str) and x.strip()]
                 except json.JSONDecodeError:
                     default_priorities = None
         if not default_priorities:
             default_priorities = ['low', 'medium', 'high', 'critical']
         try:
-            for idx, p in enumerate(default_priorities):
-                db.session.add(BoardPriority(board_id=board.id, name=p, position=idx))
+            for idx, priority in enumerate(default_priorities):
+                db.session.add(BoardPriority(board_id=board.id, name=priority, position=idx))
             db.session.commit()
         except sqlalchemy.exc.SQLAlchemyError:
             db.session.rollback()
@@ -143,7 +146,8 @@ def create_board(current_user) -> Tuple[Response, int]:
             'description': board.description or '',
             'owner_id': board.owner_id,
             'created_at': board.created_at.isoformat(),
-            'updated_at': board.updated_at.isoformat() if board.updated_at else None
+            'updated_at': board.updated_at.isoformat() if board.updated_at else None,
+            'background_color': getattr(board, 'background_color', None)
         }), 201
     except sqlalchemy.exc.SQLAlchemyError:
         db.session.rollback()
@@ -168,7 +172,8 @@ def get_board(current_user, board_id) -> Tuple[Response, int]:
             'description': board.description or '',
             'owner_id': board.owner_id,
             'created_at': board.created_at.isoformat(),
-            'updated_at': board.updated_at.isoformat() if board.updated_at else None
+            'updated_at': board.updated_at.isoformat() if board.updated_at else None,
+            'background_color': getattr(board, 'background_color', None)
         }), 200
     except sqlalchemy.exc.SQLAlchemyError:
         return jsonify({'message': 'Internal server error'}), 500
@@ -188,6 +193,8 @@ def update_board(current_user, board_id) -> Tuple[Response, int]:
             board.name = data['name']
         if 'description' in data:
             board.description = data['description']
+        if 'background_color' in data:
+            board.background_color = data['background_color']
         # handle invitations add/remove
         add_usernames: list[str] = data.get('add_usernames') or []
         add_user_ids: list[int] = data.get('add_user_ids') or []
@@ -201,32 +208,32 @@ def update_board(current_user, board_id) -> Tuple[Response, int]:
             manager = BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first()
         if (board.owner_id == current_user.id) or (manager and manager.role in ('owner', 'admin')):
             if isinstance(add_usernames, list):
-                for uname in add_usernames:
-                    if not isinstance(uname, str):
+                for username_to_add in add_usernames:
+                    if not isinstance(username_to_add, str):
                         continue
-                    u: User | None = User.query.filter_by(username=uname).first()
-                    if u and not BoardMember.query.filter_by(board_id=board.id, user_id=u.id).first():
-                        db.session.add(BoardMember(board_id=board.id, user_id=u.id, role='member'))
+                    user_to_add: User | None = User.query.filter_by(username=username_to_add).first()
+                    if user_to_add and not BoardMember.query.filter_by(board_id=board.id, user_id=user_to_add.id).first():
+                        db.session.add(BoardMember(board_id=board.id, user_id=user_to_add.id, role='member'))
             if isinstance(add_user_ids, list):
-                for uid in add_user_ids:
+                for user_id_to_add in add_user_ids:
                     try:
-                        uid_int: int = int(uid)
+                        user_id_to_add_int: int = int(user_id_to_add)
                     except (TypeError, ValueError):
                         continue
-                    if not BoardMember.query.filter_by(board_id=board.id, user_id=uid_int).first():
-                        db.session.add(BoardMember(board_id=board.id, user_id=uid_int, role='member'))
+                    if not BoardMember.query.filter_by(board_id=board.id, user_id=user_id_to_add_int).first():
+                        db.session.add(BoardMember(board_id=board.id, user_id=user_id_to_add_int, role='member'))
             if isinstance(remove_user_ids, list):
-                for uid in remove_user_ids:
+                for user_id_to_remove in remove_user_ids:
                     try:
-                        uid_int: int = int(uid)
+                        user_id_to_remove_int: int = int(user_id_to_remove)
                     except (TypeError, ValueError):
                         continue
                     # prevent removing the owner
-                    if uid_int == board.owner_id:
+                    if user_id_to_remove_int == board.owner_id:
                         continue
-                    bm = BoardMember.query.filter_by(board_id=board.id, user_id=uid_int).first()
-                    if bm:
-                        db.session.delete(bm)
+                    board_member = BoardMember.query.filter_by(board_id=board.id, user_id=user_id_to_remove_int).first()
+                    if board_member:
+                        db.session.delete(board_member)
         db.session.commit()
         return jsonify({'message': 'Board updated'}), 200
     except sqlalchemy.exc.SQLAlchemyError:
@@ -269,21 +276,21 @@ def list_board_tasks(current_user, board_id) -> Tuple[Response, int]:
         tasks.sort(key=lambda t: (status_order.get(t.status, 9999), t.position or 0, t.id))
         return jsonify([
             {
-                'id': t.id,
-                'title': t.title,
-                'description': t.description or '',
-                'status': t.status,
-                'priority': t.priority,
-                'board_id': t.board_id,
-                'assigned_to': t.assigned_to,
-                'created_by': t.created_by,
-                'due_date': t.due_date.isoformat() if t.due_date else None,
-                'estimate': t.estimate,
-                'effort_used': t.effort_used,
-                'position': t.position,
-                'created_at': t.created_at.isoformat(),
-                'updated_at': t.updated_at.isoformat() if t.updated_at else None
-            } for t in tasks
+                'id': task.id,
+                'title': task.title,
+                'description': task.description or '',
+                'status': task.status,
+                'priority': task.priority,
+                'board_id': task.board_id,
+                'assigned_to': task.assigned_to,
+                'created_by': task.created_by,
+                'due_date': task.due_date.isoformat() if task.due_date else None,
+                'estimate': task.estimate,
+                'effort_used': task.effort_used,
+                'position': task.position,
+                'created_at': task.created_at.isoformat(),
+                'updated_at': task.updated_at.isoformat() if task.updated_at else None
+            } for task in tasks
         ]), 200
     except sqlalchemy.exc.SQLAlchemyError:
         return jsonify({'message': 'Internal server error'}), 500
@@ -305,7 +312,7 @@ def create_board_task(current_user, board_id) -> Tuple[Response, int]:
         title: str | None = data.get('title')
         if not title:
             return jsonify({'message': 'Title is required'}), 400
-    # next position in the column (status)
+        # next position in the column (status)
         status: str | None = data.get('status', 'todo')
         # ensure status exists in this board, else add it at end
         status_row: BoardStatus | None = BoardStatus.query.filter_by(board_id=board.id, name=status).first()
@@ -493,8 +500,8 @@ def list_statuses(current_user, board_id) -> Tuple[Response, int]:
         return jsonify({'message': 'Board not found'}), 404
     statuses: list[BoardStatus] = BoardStatus.query.filter_by(board_id=board.id).order_by(BoardStatus.position, BoardStatus.id).all()
     return jsonify([
-        {'id': s.id, 'name': s.name, 'position': s.position}
-    for s in statuses]), 200
+        {'id': status.id, 'name': status.name, 'position': status.position, 'color': getattr(status, 'color', None)}
+    for status in statuses]), 200
 
 @board_bp.route('/boards/<int:board_id>/statuses', methods=['POST'])
 @token_required
@@ -510,10 +517,11 @@ def create_status(current_user, board_id) -> Tuple[Response, int]:
     if BoardStatus.query.filter_by(board_id=board.id, name=name).first():
         return jsonify({'message': 'Status already exists'}), 400
     max_pos: int = db.session.query(db.func.max(BoardStatus.position)).filter_by(board_id=board.id).scalar() or 0
-    status: BoardStatus = BoardStatus(board_id=board.id, name=name, position=max_pos + 1)
+    status_color: str | None = data.get('color')
+    status: BoardStatus = BoardStatus(board_id=board.id, name=name, position=max_pos + 1, color=status_color)
     db.session.add(status)
     db.session.commit()
-    return jsonify({'id': status.id, 'name': status.name, 'position': status.position}), 201
+    return jsonify({'id': status.id, 'name': status.name, 'position': status.position, 'color': getattr(status, 'color', None)}), 201
 
 @board_bp.route('/boards/<int:board_id>/statuses/<int:status_id>', methods=['PUT'])
 @token_required
@@ -538,6 +546,8 @@ def update_status(current_user, board_id, status_id) -> Tuple[Response, int]:
         BoardTask.query.filter_by(board_id=board.id, status=old_name).update({BoardTask.status: data['name']})
     if 'position' in data:
         status.position = int(data['position'])
+    if 'color' in data:
+        status.color = data['color']
     db.session.commit()
     return jsonify({'message': 'Status updated'}), 200
 
@@ -575,8 +585,8 @@ def list_priorities(current_user, board_id) -> Tuple[Response, int]:
         return jsonify({'message': 'Board not found'}), 404
     priorities: list[BoardPriority] = BoardPriority.query.filter_by(board_id=board.id).order_by(BoardPriority.position, BoardPriority.id).all()
     return jsonify([
-        {'id': p.id, 'name': p.name, 'position': p.position}
-    for p in priorities]), 200
+        {'id': priority.id, 'name': priority.name, 'position': priority.position}
+    for priority in priorities]), 200
 
 @board_bp.route('/boards/<int:board_id>/priorities', methods=['POST'])
 @token_required
@@ -593,11 +603,12 @@ def create_priority(current_user, board_id) -> Tuple[Response, int]:
         return jsonify({'message': 'Name is required'}), 400
     if BoardPriority.query.filter_by(board_id=board.id, name=name).first():
         return jsonify({'message': 'Priority already exists'}), 400
+    # Bump the max index and set the new priority
     max_pos: int = db.session.query(db.func.max(BoardPriority.position)).filter_by(board_id=board.id).scalar() or 0
-    pr: BoardPriority = BoardPriority(board_id=board.id, name=name, position=max_pos + 1)
-    db.session.add(pr)
+    board_priority: BoardPriority = BoardPriority(board_id=board.id, name=name, position=max_pos + 1)
+    db.session.add(board_priority)
     db.session.commit()
-    return jsonify({'id': pr.id, 'name': pr.name, 'position': pr.position}), 201
+    return jsonify({'id': board_priority.id, 'name': board_priority.name, 'position': board_priority.position}), 201
 
 @board_bp.route('/boards/<int:board_id>/priorities/<int:priority_id>', methods=['PUT'])
 @token_required
@@ -608,19 +619,19 @@ def update_priority(current_user, board_id, priority_id) -> Tuple[Response, int]
     board: Board | None = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
     if not board:
         return jsonify({'message': 'Board not found'}), 404
-    pr: BoardPriority | None = BoardPriority.query.filter_by(id=priority_id, board_id=board.id).first()
-    if not pr:
+    board_priority: BoardPriority | None = BoardPriority.query.filter_by(id=priority_id, board_id=board.id).first()
+    if not board_priority:
         return jsonify({'message': 'Priority not found'}), 404
     data: dict = request.get_json() or {}
     if 'name' in data:
-        if BoardPriority.query.filter(BoardPriority.board_id==board.id, BoardPriority.name==data['name'], BoardPriority.id!=pr.id).first():
+        if BoardPriority.query.filter(BoardPriority.board_id==board.id, BoardPriority.name==data['name'], BoardPriority.id!=board_priority.id).first():
             return jsonify({'message': 'Priority name already used'}), 400
-        old_name: str = pr.name
-        pr.name = data['name']
+        old_name: str = board_priority.name
+        board_priority.name = data['name']
         # update all tasks referencing old name
         BoardTask.query.filter_by(board_id=board.id, priority=old_name).update({BoardTask.priority: data['name']})
     if 'position' in data:
-        pr.position = int(data['position'])
+        board_priority.position = int(data['position'])
     db.session.commit()
     return jsonify({'message': 'Priority updated'}), 200
 
@@ -633,14 +644,14 @@ def delete_priority(current_user, board_id, priority_id) -> Tuple[Response, int]
     board: Board | None = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
     if not board:
         return jsonify({'message': 'Board not found'}), 404
-    pr: BoardPriority | None = BoardPriority.query.filter_by(id=priority_id, board_id=board.id).first()
-    if not pr:
+    board_priority: BoardPriority | None = BoardPriority.query.filter_by(id=priority_id, board_id=board.id).first()
+    if not board_priority:
         return jsonify({'message': 'Priority not found'}), 404
     # move tasks with this priority to fallback (first priority) or 'medium'
     fallback: BoardPriority | None = BoardPriority.query.filter_by(board_id=board.id).order_by(BoardPriority.position).first()
-    fallback_name: str = fallback.name if fallback and fallback.id != pr.id else 'medium'
-    BoardTask.query.filter_by(board_id=board.id, priority=pr.name).update({BoardTask.priority: fallback_name})
-    db.session.delete(pr)
+    fallback_name: str = fallback.name if fallback and fallback.id != board_priority.id else 'medium'
+    BoardTask.query.filter_by(board_id=board.id, priority=board_priority.name).update({BoardTask.priority: fallback_name})
+    db.session.delete(board_priority)
     db.session.commit()
     return jsonify({'message': 'Priority deleted'}), 200
 
@@ -657,14 +668,14 @@ def list_board_members(current_user, board_id) -> Tuple[Response, int]:
     members = BoardMember.query.filter_by(board_id=board_id).all()
     return jsonify([
         {
-            'id': m.id,
-            'board_id': m.board_id,
-            'user_id': m.user_id,
-            'username': getattr(m.user, 'username', None),
-            'role': m.role,
-            'joined_at': m.joined_at.isoformat() if m.joined_at else None
+            'id': member.id,
+            'board_id': member.board_id,
+            'user_id': member.user_id,
+            'username': getattr(member.user, 'username', None),
+            'role': member.role,
+            'joined_at': member.joined_at.isoformat() if member.joined_at else None
         }
-        for m in members
+        for member in members
     ]), 200
 
 @board_bp.route('/boards/<int:board_id>/members', methods=['POST'])
@@ -687,22 +698,22 @@ def add_board_member(current_user, board_id) -> Tuple[Response, int]:
     user_id: str | None = data.get('user_id')
     username: str | None = data.get('username')
     role: str = data.get('role', 'member')
-    uid: int | None = None
+    user_to_add_id: int | None = None
     if user_id is not None:
         try:
-            uid = int(user_id)
+            user_to_add_id = int(user_id)
         except (TypeError, ValueError):
             return jsonify({'message': 'Invalid user_id'}), 400
     elif username:
-        u: User | None = User.query.filter_by(username=username).first()
-        if not u:
+        user_to_add: User | None = User.query.filter_by(username=username).first()
+        if not user_to_add:
             return jsonify({'message': 'User not found'}), 404
-        uid = u.id
+        user_to_add_id = user_to_add.id
     else:
         return jsonify({'message': 'user_id or username required'}), 400
-    if BoardMember.query.filter_by(board_id=board.id, user_id=uid).first():
+    if BoardMember.query.filter_by(board_id=board.id, user_id=user_to_add_id).first():
         return jsonify({'message': 'Already a member'}), 400
-    db.session.add(BoardMember(board_id=board.id, user_id=uid, role=role))
+    db.session.add(BoardMember(board_id=board.id, user_id=user_to_add_id, role=role))
     db.session.commit()
     return jsonify({'message': 'Member added'}), 201
 
@@ -724,9 +735,9 @@ def remove_board_member(current_user, board_id, user_id) -> Tuple[Response, int]
             return jsonify({'message': 'Insufficient permissions'}), 403
     if user_id == board.owner_id:
         return jsonify({'message': 'Cannot remove owner'}), 400
-    bm: BoardMember | None = BoardMember.query.filter_by(board_id=board.id, user_id=user_id).first()
-    if not bm:
+    board_member_to_remove: BoardMember | None = BoardMember.query.filter_by(board_id=board.id, user_id=user_id).first()
+    if not board_member_to_remove:
         return jsonify({'message': 'Not a member'}), 404
-    db.session.delete(bm)
+    db.session.delete(board_member_to_remove)
     db.session.commit()
     return jsonify({'message': 'Member removed'}), 200

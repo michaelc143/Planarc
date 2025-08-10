@@ -16,6 +16,7 @@ type StatusPickerProps = CommonProps & {
 export function StatusPicker({ boardId, value, onChange, refreshKey }: StatusPickerProps): React.JSX.Element {
 	const [statuses, setStatuses] = useState<BoardStatus[]>([]);
 	const [newName, setNewName] = useState("");
+	const [newColor, setNewColor] = useState<string>("#f3f4f6");
 
 	useEffect(() => {
 		(async () => {
@@ -52,7 +53,7 @@ export function StatusPicker({ boardId, value, onChange, refreshKey }: StatusPic
 		if (!name) {
 			return;
 		}
-		const created = await boardService.createStatus(boardId, name);
+		const created = await boardService.createStatus(boardId, name, newColor || undefined);
 		const next = [...statuses, created].sort((a, b) => a.position - b.position);
 		setStatuses(next);
 		setNewName("");
@@ -75,6 +76,7 @@ export function StatusPicker({ boardId, value, onChange, refreshKey }: StatusPic
 			</div>
 			<div className="flex flex-wrap items-center gap-2 min-w-0">
 				<input className="border px-2 py-1 rounded flex-1 min-w-0 w-full sm:w-auto" placeholder="New status" value={newName} onChange={(e) => setNewName(e.target.value)} />
+				<input type="color" className="border rounded w-10 h-10 p-0" value={newColor} onChange={(e) => setNewColor(e.target.value)} />
 				<button type="button" className="px-3 py-1 border rounded shrink-0" onClick={add}>Add</button>
 			</div>
 		</div>

@@ -20,7 +20,7 @@ class BoardService {
 		return res.json();
 	}
 
-	async createBoard(payload: Pick<Board, "name" | "description"> & { invite_usernames?: string[]; invite_user_ids?: number[] }): Promise<Board> {
+	async createBoard(payload: Pick<Board, "name" | "description"> & { invite_usernames?: string[]; invite_user_ids?: number[]; background_color?: string }): Promise<Board> {
 		const res = await fetch(`${API_BASE_URL}/boards`, {
 			method: "POST",
 			headers: this.authHeaders(),
@@ -40,7 +40,7 @@ class BoardService {
 		return res.json();
 	}
 
-	async updateBoard(boardId: number, payload: Partial<Pick<Board, "name" | "description">> & { add_usernames?: string[]; add_user_ids?: number[]; remove_user_ids?: number[] }): Promise<void> {
+	async updateBoard(boardId: number, payload: Partial<Pick<Board, "name" | "description" | "background_color">> & { add_usernames?: string[]; add_user_ids?: number[]; remove_user_ids?: number[] }): Promise<void> {
 		const res = await fetch(`${API_BASE_URL}/boards/${boardId}`, {
 			method: "PUT",
 			headers: this.authHeaders(),
@@ -167,11 +167,11 @@ class BoardService {
 		return res.json();
 	}
 
-	async createStatus(boardId: number, name: string): Promise<BoardStatus> {
+	async createStatus(boardId: number, name: string, color?: string): Promise<BoardStatus> {
 		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/statuses`, {
 			method: "POST",
 			headers: this.authHeaders(),
-			body: JSON.stringify({ name }),
+			body: JSON.stringify({ name, color }),
 		});
 		if (!res.ok) {
 			throw new Error((await res.json()).message || "Failed to create status");
@@ -179,7 +179,7 @@ class BoardService {
 		return res.json();
 	}
 
-	async updateStatus(boardId: number, statusId: number, payload: Partial<Pick<BoardStatus, "name" | "position">>): Promise<void> {
+	async updateStatus(boardId: number, statusId: number, payload: Partial<Pick<BoardStatus, "name" | "position" | "color">>): Promise<void> {
 		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/statuses/${statusId}`, {
 			method: "PUT",
 			headers: this.authHeaders(),

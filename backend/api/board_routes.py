@@ -1,9 +1,9 @@
 """ Board and Task routes for the API """
-import sqlalchemy.exc
-from flask import Blueprint, jsonify, request
-from models import db, Board, BoardTask, BoardStatus, BoardPriority
-from auth_middleware import token_required
 from datetime import datetime
+import sqlalchemy.exc
+from auth_middleware import token_required
+from flask import Blueprint, jsonify, request
+from models import Board, BoardPriority, BoardStatus, BoardTask, db
 
 board_bp = Blueprint('boards', __name__)
 
@@ -26,6 +26,9 @@ def _parse_date(value):
 @board_bp.route('/boards', methods=['GET'])
 @token_required
 def list_boards(current_user):
+    """
+    List all boards for the current user.
+    """
     try:
         boards = Board.query.filter_by(owner_id=current_user.id).all()
         return jsonify([
@@ -44,6 +47,9 @@ def list_boards(current_user):
 @board_bp.route('/boards', methods=['POST'])
 @token_required
 def create_board(current_user):
+    """
+    Create a new board for the current user.
+    """
     try:
         data = request.get_json() or {}
         name = data.get('name')
@@ -77,6 +83,9 @@ def create_board(current_user):
 @board_bp.route('/boards/<int:board_id>', methods=['GET'])
 @token_required
 def get_board(current_user, board_id):
+    """
+    Get a specific board by ID.
+    """
     try:
         board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
         if not board:
@@ -95,6 +104,9 @@ def get_board(current_user, board_id):
 @board_bp.route('/boards/<int:board_id>', methods=['PUT'])
 @token_required
 def update_board(current_user, board_id):
+    """
+    Update a specific board by ID.
+    """
     try:
         board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
         if not board:
@@ -113,6 +125,9 @@ def update_board(current_user, board_id):
 @board_bp.route('/boards/<int:board_id>', methods=['DELETE'])
 @token_required
 def delete_board(current_user, board_id):
+    """
+    Delete a specific board by ID.
+    """
     try:
         board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
         if not board:
@@ -128,6 +143,9 @@ def delete_board(current_user, board_id):
 @board_bp.route('/boards/<int:board_id>/tasks', methods=['GET'])
 @token_required
 def list_board_tasks(current_user, board_id):
+    """
+    List all tasks for a specific board.
+    """
     try:
         board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
         if not board:
@@ -158,6 +176,9 @@ def list_board_tasks(current_user, board_id):
 @board_bp.route('/boards/<int:board_id>/tasks', methods=['POST'])
 @token_required
 def create_board_task(current_user, board_id):
+    """
+    Create a new task in a specific board.
+    """
     try:
         board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
         if not board:
@@ -219,6 +240,9 @@ def create_board_task(current_user, board_id):
 @board_bp.route('/boards/<int:board_id>/tasks/<int:task_id>', methods=['PUT'])
 @token_required
 def update_board_task(current_user, board_id, task_id):
+    """
+    Update a specific task in a board.
+    """
     try:
         board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
         if not board:
@@ -256,6 +280,7 @@ def update_board_task(current_user, board_id, task_id):
 @board_bp.route('/boards/<int:board_id>/tasks/<int:task_id>', methods=['DELETE'])
 @token_required
 def delete_board_task(current_user, board_id, task_id):
+    """Delete a specific task in a board."""
     try:
         board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
         if not board:
@@ -324,6 +349,7 @@ def reorder_tasks(current_user, board_id):
 @board_bp.route('/boards/<int:board_id>/statuses', methods=['GET'])
 @token_required
 def list_statuses(current_user, board_id):
+    """List all statuses for a specific board."""
     board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
     if not board:
         return jsonify({'message': 'Board not found'}), 404
@@ -335,6 +361,7 @@ def list_statuses(current_user, board_id):
 @board_bp.route('/boards/<int:board_id>/statuses', methods=['POST'])
 @token_required
 def create_status(current_user, board_id):
+    """Create a new status for a specific board."""
     board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
     if not board:
         return jsonify({'message': 'Board not found'}), 404
@@ -353,6 +380,9 @@ def create_status(current_user, board_id):
 @board_bp.route('/boards/<int:board_id>/statuses/<int:status_id>', methods=['PUT'])
 @token_required
 def update_status(current_user, board_id, status_id):
+    """
+    Update a specific status in a board.
+    """
     board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
     if not board:
         return jsonify({'message': 'Board not found'}), 404
@@ -376,6 +406,9 @@ def update_status(current_user, board_id, status_id):
 @board_bp.route('/boards/<int:board_id>/statuses/<int:status_id>', methods=['DELETE'])
 @token_required
 def delete_status(current_user, board_id, status_id):
+    """
+    Delete a specific status in a board.
+    """
     board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
     if not board:
         return jsonify({'message': 'Board not found'}), 404
@@ -394,6 +427,9 @@ def delete_status(current_user, board_id, status_id):
 @board_bp.route('/boards/<int:board_id>/priorities', methods=['GET'])
 @token_required
 def list_priorities(current_user, board_id):
+    """
+    List all priorities for a specific board.
+    """
     board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
     if not board:
         return jsonify({'message': 'Board not found'}), 404
@@ -405,6 +441,9 @@ def list_priorities(current_user, board_id):
 @board_bp.route('/boards/<int:board_id>/priorities', methods=['POST'])
 @token_required
 def create_priority(current_user, board_id):
+    """
+    Create a new priority for a specific board.
+    """
     board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
     if not board:
         return jsonify({'message': 'Board not found'}), 404
@@ -423,6 +462,9 @@ def create_priority(current_user, board_id):
 @board_bp.route('/boards/<int:board_id>/priorities/<int:priority_id>', methods=['PUT'])
 @token_required
 def update_priority(current_user, board_id, priority_id):
+    """
+    Update a specific priority in a board.
+    """
     board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
     if not board:
         return jsonify({'message': 'Board not found'}), 404
@@ -445,6 +487,9 @@ def update_priority(current_user, board_id, priority_id):
 @board_bp.route('/boards/<int:board_id>/priorities/<int:priority_id>', methods=['DELETE'])
 @token_required
 def delete_priority(current_user, board_id, priority_id):
+    """
+    Delete a specific priority in a board.
+    """
     board = Board.query.filter_by(id=board_id, owner_id=current_user.id).first()
     if not board:
         return jsonify({'message': 'Board not found'}), 404

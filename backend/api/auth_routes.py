@@ -79,7 +79,7 @@ def register():
         user = User(username=username, password=hashed_password, email=email)
         db.session.add(user)
         db.session.commit()
-        
+
         # Generate JWT token
         token = jwt.encode({
             'user_id': user.id

@@ -32,7 +32,7 @@ def delete_user(current_user, username):
     try:
         # Only allow admins or the user themselves to delete
         user_to_delete = User.query.filter_by(username=username).first()
-        
+
         if user_to_delete is None:
             return jsonify({'message': 'User not found'}), 404
 
@@ -55,10 +55,10 @@ def edit_username(current_user, user_id):
     try:
         data = request.get_json()
         new_username = data.get('username')
-        
+
         if not new_username:
             return jsonify({'message': 'Username is required'}), 400
-        
+
         # Find the user by ID
         user = User.query.get(user_id)
 

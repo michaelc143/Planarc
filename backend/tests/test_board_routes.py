@@ -172,21 +172,31 @@ class BoardRouteTests(unittest.TestCase):
         # add task
         r2 = self.client.post(
             f"/boards/{board_id}/tasks",
-            json={"title": "T1", "status": "todo", "priority": "low"},
+            json={"title": "T1", "status": "todo", "priority": "low", "estimate": 8, "effort_used": 3},
             headers=self._auth(token),
         )
         self.assertEqual(r2.status_code, 201)
-        task_id = (r2.get_json() or {}).get("id")
+        body = r2.get_json() or {}
+        task_id = body.get("id")
+        self.assertEqual(body.get("estimate"), 8)
+        self.assertEqual(body.get("effort_used"), 3)
         # list tasks
         r3 = self.client.get(f"/boards/{board_id}/tasks", headers=self._auth(token))
         self.assertEqual(r3.status_code, 200)
+        listed = r3.get_json() or []
+        self.assertTrue(any(t.get("id") == task_id and t.get("effort_used") == 3 for t in listed))
         # update task
         r4 = self.client.put(
             f"/boards/{board_id}/tasks/{task_id}",
-            json={"status": "in_progress", "priority": "high"},
+            json={"status": "in_progress", "priority": "high", "effort_used": 5},
             headers=self._auth(token),
         )
         self.assertEqual(r4.status_code, 200)
+        # confirm updated value present
+        r4b = self.client.get(f"/boards/{board_id}/tasks", headers=self._auth(token))
+        self.assertEqual(r4b.status_code, 200)
+        listed2 = r4b.get_json() or []
+        self.assertTrue(any(t.get("id") == task_id and t.get("effort_used") == 5 for t in listed2))
         # delete task
         r5 = self.client.delete(
             f"/boards/{board_id}/tasks/{task_id}",

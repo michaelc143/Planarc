@@ -50,6 +50,12 @@ with app.app_context():
         db.session.commit()
     except sqlalchemy.exc.SQLAlchemyError:
         db.session.rollback()
+    # add effort_used column to board_tasks if missing (best-effort)
+    try:
+        db.session.execute(text("ALTER TABLE board_tasks ADD COLUMN effort_used INT NULL DEFAULT 0"))
+        db.session.commit()
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.session.rollback()
     try:
         db.session.execute(text("CREATE INDEX idx_board_tasks_board_status_position ON board_tasks (board_id, status, position)"))
         db.session.commit()

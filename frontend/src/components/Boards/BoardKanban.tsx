@@ -131,6 +131,7 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 	const [editStatus, setEditStatus] = useState<string>("todo");
 	const [editOrigStatus, setEditOrigStatus] = useState<string>("todo");
 	const [editEstimate, setEditEstimate] = useState<string>("");
+	const [editEffortUsed, setEditEffortUsed] = useState<string>("0");
 	const estimateInputRef = useRef<HTMLInputElement | null>(null);
 	const [focusEstimateNext, setFocusEstimateNext] = useState<number | null>(null);
 
@@ -188,6 +189,7 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 		setEditStatus(t.status);
 		setEditOrigStatus(t.status);
 		setEditEstimate(typeof t.estimate === "number" ? String(t.estimate) : "");
+		setEditEffortUsed(typeof t.effort_used === "number" ? String(t.effort_used) : "0");
 	};
 	const cancelEdit = () => setEditingId(null);
 
@@ -200,6 +202,7 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 				description: editDesc,
 				priority: editPriority,
 				estimate: trimmed === "" ? null : (/^\d+$/.test(trimmed) ? Number(trimmed) : undefined),
+				effort_used: /^\d+$/.test(editEffortUsed.trim()) ? Number(editEffortUsed.trim()) : 0,
 			});
 			if (editStatus !== editOrigStatus) {
 				const toPos = (columns[editStatus] ? columns[editStatus].length : 0);
@@ -207,7 +210,7 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 				setTasks(prev => prev.map(t => t.id === editingId ? { ...t, status: editStatus, position: toPos } : t));
 			}
 			setTasks(prev => prev.map(t => t.id === editingId ? { ...t, title: editTitle, description: editDesc, priority: editPriority } : t));
-			setTasks(prev => prev.map(t => t.id === editingId ? { ...t, title: editTitle, description: editDesc, priority: editPriority, estimate: (trimmed === "" ? undefined : (/^\d+$/.test(trimmed) ? Number(trimmed) : t.estimate)) } : t));
+			setTasks(prev => prev.map(t => t.id === editingId ? { ...t, title: editTitle, description: editDesc, priority: editPriority, estimate: (trimmed === "" ? undefined : (/^\d+$/.test(trimmed) ? Number(trimmed) : t.estimate)), effort_used: (/^\d+$/.test(editEffortUsed.trim()) ? Number(editEffortUsed.trim()) : 0) } : t));
 			setEditingId(null);
 		} catch (e) {
 			showToast(e instanceof Error ? e.message : "Failed to update task", "error");
@@ -349,6 +352,10 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 															<label htmlFor={`estimate-${t.id}`} className="block text-xs text-gray-700 mb-1">Estimate (points)</label>
 															<input ref={estimateInputRef} id={`estimate-${t.id}`} className="border px-2 py-1 rounded w-full sm:w-24" type="number" min={0} value={editEstimate} onChange={e => setEditEstimate(e.target.value)} />
 														</div>
+														<div className="w-full sm:w-auto">
+															<label htmlFor={`effort-${t.id}`} className="block text-xs text-gray-700 mb-1">Effort used</label>
+															<input id={`effort-${t.id}`} className="border px-2 py-1 rounded w-full sm:w-24" type="number" min={0} value={editEffortUsed} onChange={e => setEditEffortUsed(e.target.value)} />
+														</div>
 													</div>
 													<div className="flex gap-2">
 														<button className="bg-blue-600 text-white px-2 py-1 rounded" onClick={saveEdit}>Save</button>
@@ -365,14 +372,17 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 														</div>
 													</div>
 													<div className="text-sm text-gray-600">{t.description}</div>
-													{typeof t.estimate === "number" && (
+													{(typeof t.effort_used === "number" || typeof t.estimate === "number") && (
 														<div className="text-xs text-gray-500 mt-1">
-													Estimate: {t.estimate}
+															{typeof t.effort_used === "number"
+																? (typeof t.estimate === "number" ? (<span>Used: {t.effort_used} / Est: {t.estimate}</span>) : (<span>Used: {t.effort_used}</span>))
+																: (typeof t.estimate === "number" ? (<span>Estimate: {t.estimate}</span>) : null)
+															}
 															<button
 																className="ml-2 underline text-blue-600"
 																onClick={() => { setFocusEstimateNext(t.id); startEdit(t); }}
 															>
-														Change
+													Change
 															</button>
 														</div>
 													)}

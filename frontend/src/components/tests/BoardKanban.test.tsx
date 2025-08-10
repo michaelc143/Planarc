@@ -15,6 +15,12 @@ jest.mock("../../services/board-service", () => ({
 		reorderTasks: jest.fn(),
 		updateTask: jest.fn(),
 		deleteTask: jest.fn(),
+		listPriorities: jest.fn().mockResolvedValue([
+			{ id: 1, name: "low", position: 0 },
+			{ id: 2, name: "medium", position: 1 },
+			{ id: 3, name: "high", position: 2 },
+			{ id: 4, name: "critical", position: 3 },
+		]),
 	},
 }));
 
@@ -53,12 +59,16 @@ describe("BoardKanban", () => {
 		const estimateInput = screen.getByLabelText(/Estimate \(points\)/i);
 		await userEvent.clear(estimateInput);
 		await userEvent.type(estimateInput, "8");
+		// set effort used to 5
+		const effortInput = screen.getByLabelText(/Effort used/i);
+		await userEvent.clear(effortInput);
+		await userEvent.type(effortInput, "5");
 		await act(async () => {
 			await userEvent.click(screen.getByRole("button", { name: /Save/i }));
 		});
 		await waitFor(() => expect(boardService.updateTask).toHaveBeenCalled());
-		// ensure estimate in payload
-		expect((boardService.updateTask as jest.Mock).mock.calls[0][2]).toEqual(expect.objectContaining({ estimate: 8 }));
+		// ensure estimate and effort_used in payload
+		expect((boardService.updateTask as jest.Mock).mock.calls[0][2]).toEqual(expect.objectContaining({ estimate: 8, effort_used: 5 }));
 		await waitFor(() => expect(boardService.reorderTasks).toHaveBeenCalled());
 
 		// delete T2 (target the delete inside the T2 card specifically)

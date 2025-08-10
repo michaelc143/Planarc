@@ -85,6 +85,7 @@ export type BoardTask = {
   created_by: number;
   due_date?: string;
   estimate?: number;
+  effort_used?: number;
   position?: number;
   created_at: string;
   updated_at?: string;

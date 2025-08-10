@@ -169,6 +169,9 @@ export default function BoardDetail(): React.JSX.Element {
 			<div className="flex items-center justify-between mb-4">
 				<Link className="text-blue-600 hover:underline" to="/boards">← Back to Boards</Link>
 				<div className="space-x-2">
+					{board && (
+						<Link to={`/boards/${id}/burndown`} className="px-3 py-1 border rounded">Burndown</Link>
+					)}
 					<button onClick={() => setEditingBoard(v => !v)} className="px-3 py-1 border rounded">{editingBoard ? "Cancel" : "Edit Board"}</button>
 					{board && Number(user?.userId) === board.owner_id && (
 						<button onClick={onDeleteBoard} className="px-3 py-1 border rounded text-red-600">Delete Board</button>

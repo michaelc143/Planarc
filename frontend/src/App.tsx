@@ -19,6 +19,7 @@ import { UserProvider } from "./contexts/UserContext";
 import { ToastContainer } from "react-toastify";
 import BoardsPage from "./components/Boards/BoardsPage";
 import BoardDetail from "./components/Boards/BoardDetail";
+import BoardBurndown from "./components/Boards/BoardBurndown";
 import DefaultBoardSettings from "./components/Settings/DefaultBoardSettings";
 
 function App() {
@@ -41,6 +42,7 @@ function App() {
 							<Route path='/dashboard' element={<Dashboard />} />
 							<Route path='/boards' element={<BoardsPage />} />
 							<Route path='/boards/:boardId' element={<BoardDetail />} />
+							<Route path='/boards/:boardId/burndown' element={<BoardBurndown />} />
 							<Route path='/settings/defaults' element={<DefaultBoardSettings />} />
 							<Route path='*' element={<PageNotFound />} />
 						</Routes>

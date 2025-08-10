@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import userSettingsService, { UserDefaultsDTO } from "../../services/user-settings-service";
+import { ToastContext } from "../../contexts/ToastContext";
 
 export default function DefaultBoardSettings(): React.JSX.Element {
+	const { showToast } = useContext(ToastContext);
 	const [statuses, setStatuses] = useState<string[]>([]);
 	const [priorities, setPriorities] = useState<string[]>([]);
 	const [saving, setSaving] = useState(false);
-	const [error, setError] = useState<string>("");
 	const [saved, setSaved] = useState(false);
 
 	useEffect(() => {
@@ -15,7 +16,7 @@ export default function DefaultBoardSettings(): React.JSX.Element {
 				setStatuses(Array.isArray(data.statuses) ? data.statuses : []);
 				setPriorities(Array.isArray(data.priorities) ? data.priorities : []);
 			} catch (e) {
-				setError(e instanceof Error ? e.message : "Failed to load defaults");
+				showToast(e instanceof Error ? e.message : "Failed to load defaults", "error");
 			}
 		})();
 	}, []);
@@ -35,7 +36,6 @@ export default function DefaultBoardSettings(): React.JSX.Element {
 	const onSave = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setSaving(true);
-		setError("");
 		setSaved(false);
 		const payload: UserDefaultsDTO = {
 			statuses: statuses.map(s => s.trim()).filter(Boolean),
@@ -45,7 +45,7 @@ export default function DefaultBoardSettings(): React.JSX.Element {
 			await userSettingsService.setDefaults(payload);
 			setSaved(true);
 		} catch (e) {
-			setError(e instanceof Error ? e.message : "Failed to save defaults");
+			showToast(e instanceof Error ? e.message : "Failed to save defaults", "error");
 		} finally {
 			setSaving(false);
 		}
@@ -55,7 +55,6 @@ export default function DefaultBoardSettings(): React.JSX.Element {
 		<div className="p-4 max-w-3xl mx-auto">
 			<h1 className="text-2xl font-bold mb-4">Default Board Settings</h1>
 			<p className="text-sm text-gray-600 mb-6">These defaults will be used when you create a new board unless you specify custom values during creation.</p>
-			{error && <div className="text-red-600 mb-3">{error}</div>}
 			<form onSubmit={onSave} className="space-y-6">
 				<section>
 					<h2 className="font-semibold mb-2">Default Statuses</h2>

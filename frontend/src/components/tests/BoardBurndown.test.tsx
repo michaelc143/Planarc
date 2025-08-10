@@ -59,9 +59,12 @@ describe("BoardBurndown", () => {
 		// Total estimate = 5 + 3 = 8
 		const totalLabel = screen.getByText(/^Total estimate$/i);
 		expect(totalLabel.nextElementSibling).toHaveTextContent(/^8$/);
-		// Used clamped = min(2,5)+min(4,3)=2+3=5
-		const usedLabel = screen.getByText(/^Used$/i);
-		expect(usedLabel.nextElementSibling).toHaveTextContent(/^5$/);
+		// Used total = 2 + 4 = 6 (actual used, not clamped to estimate)
+		const usedLabels = screen.getAllByText(/^Used$/i);
+		const usedLabel = usedLabels.find(el => el.tagName === "DIV");
+		expect(usedLabel).toBeTruthy();
+		if (!usedLabel) { throw new Error("Used label not found"); }
+		expect(usedLabel.nextElementSibling).toHaveTextContent(/^6$/);
 		// Remaining = max(5-2,0)+max(3-4,0)=3+0=3 (target the stat label, not the description)
 		const remainingLabels = screen.getAllByText(/^Remaining$/i);
 		const remainingLabel = remainingLabels.find(el => el.tagName === "DIV");

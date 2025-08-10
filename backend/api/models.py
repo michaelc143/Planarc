@@ -1,6 +1,6 @@
 """ Models for the app backend """
 from __future__ import annotations
-from typing import List, Optional
+from typing import Optional
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import String, Integer, Text, ForeignKey, DateTime, Date

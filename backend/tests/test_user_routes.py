@@ -4,6 +4,7 @@ import sys
 import unittest
 from typing import Optional
 from flask import Flask
+import sqlalchemy
 
 CURRENT_DIR = os.path.dirname(__file__)
 BACKEND_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
@@ -25,7 +26,7 @@ def create_test_app() -> Flask:
         TESTING=True,
         SQLALCHEMY_DATABASE_URI=os.getenv(
             "TEST_DATABASE_URI",
-            f"sqlite:///" + os.path.join(BACKEND_DIR, "tests", "test_user.sqlite3"),
+            "sqlite:///" + os.path.join(BACKEND_DIR, "tests", "test_user.sqlite3"),
         ),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
     )
@@ -57,7 +58,7 @@ class UserRouteTests(unittest.TestCase):
             users_table = User.metadata.tables.get("users")
             if users_table is not None:
                 db.Model.metadata.drop_all(bind=db.engine, tables=[users_table])
-        except Exception:
+        except sqlalchemy.exc.SQLAlchemyError:
             db.session.rollback()
         users_table = User.metadata.tables.get("users")
         if users_table is not None:
@@ -71,7 +72,7 @@ class UserRouteTests(unittest.TestCase):
             users_table = User.metadata.tables.get("users")
             if users_table is not None:
                 db.Model.metadata.drop_all(bind=db.engine, tables=[users_table])
-        except Exception:
+        except sqlalchemy.exc.SQLAlchemyError:
             db.session.rollback()
 
     def _register(self, username: str, email: str, password: str = "pw") -> tuple[int, dict]:

@@ -1,7 +1,9 @@
+"""Tests for the board routes in the Planarc application."""
 import os
 import sys
 import unittest
 from typing import Optional
+import sqlalchemy
 
 from flask import Flask
 
@@ -19,13 +21,14 @@ from board_routes import board_bp  # type: ignore  # pylint: disable=wrong-impor
 
 
 def create_test_app() -> Flask:
+    """Create a Flask test application with the necessary configurations."""
     os.environ.setdefault("JWT_SECRET_KEY", "test-secret")
     app = Flask(__name__)
     app.config.update(
         TESTING=True,
         SQLALCHEMY_DATABASE_URI=os.getenv(
             "TEST_DATABASE_URI",
-            f"sqlite:///" + os.path.join(BACKEND_DIR, "tests", "test_board.sqlite3"),
+            "sqlite:///" + os.path.join(BACKEND_DIR, "tests", "test_board.sqlite3"),
         ),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
     )
@@ -36,17 +39,21 @@ def create_test_app() -> Flask:
 
 
 class BoardRouteTests(unittest.TestCase):
+    """Tests for the board routes."""
     @classmethod
     def setUpClass(cls) -> None:
+        """Set up the test class."""
         cls.app = create_test_app()
         cls.ctx = cls.app.app_context()
         cls.ctx.push()
 
     @classmethod
     def tearDownClass(cls) -> None:
+        """Tear down the test class."""
         cls.ctx.pop()
 
     def setUp(self) -> None:
+        """Set up the test database."""
         db.session.remove()
         # Create only the tables these tests require
         meta = db.Model.metadata
@@ -62,12 +69,13 @@ class BoardRouteTests(unittest.TestCase):
         tables = [t for t in tables if t is not None]
         try:
             meta.drop_all(bind=db.engine, tables=tables)
-        except Exception:
+        except sqlalchemy.exc.SQLAlchemyError:
             db.session.rollback()
         meta.create_all(bind=db.engine, tables=tables)
         self.client = self.app.test_client()
 
     def tearDown(self) -> None:
+        """Tear down the test database."""
         db.session.remove()
         meta = db.Model.metadata
         tables = [
@@ -82,10 +90,11 @@ class BoardRouteTests(unittest.TestCase):
         tables = [t for t in tables if t is not None]
         try:
             meta.drop_all(bind=db.engine, tables=tables)
-        except Exception:
+        except sqlalchemy.exc.SQLAlchemyError:
             db.session.rollback()
 
     def _register(self, username: str, email: str, password: str = "pw") -> tuple[str, int]:
+        """Register a new user and return the token and user ID."""
         r = self.client.post(
             "/register",
             json={"username": username, "email": email, "password": password},
@@ -95,9 +104,11 @@ class BoardRouteTests(unittest.TestCase):
         return body.get("token") or "", body.get("user", {}).get("id") or 0
 
     def _auth(self, token: Optional[str]) -> dict:
+        """Return the Authorization header for a request."""
         return {"Authorization": f"Bearer {token}"} if token else {}
 
     def test_create_list_get_board(self) -> None:
+        """Test creating, listing, and getting a board."""
         token, uid = self._register("owner", "owner@example.com")
         # create board
         r = self.client.post(
@@ -117,6 +128,7 @@ class BoardRouteTests(unittest.TestCase):
         self.assertEqual(r3.status_code, 200)
 
     def test_update_board_and_members(self) -> None:
+        """Test updating a board and managing members."""
         owner_token, owner_id = self._register("owner2", "owner2@example.com")
         member_token, member_id = self._register("member", "member@example.com")
         # owner creates board
@@ -148,6 +160,7 @@ class BoardRouteTests(unittest.TestCase):
         self.assertEqual(r5.status_code, 404)
 
     def test_task_crud(self) -> None:
+        """Test creating, reading, updating, and deleting tasks."""
         token, _ = self._register("tuser", "tuser@example.com")
         # create board
         r = self.client.post(

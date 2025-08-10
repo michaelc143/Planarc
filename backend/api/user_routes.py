@@ -13,7 +13,7 @@ user_bp = Blueprint('users', __name__)
 def get_user(current_user, user_id) -> Tuple[Response, int]:  # pylint: disable=unused-argument
     """ Get a user by ID """
     try:
-        user: User | None = User.query.get(user_id)
+        user: User | None = db.session.query(User).filter_by(id=user_id).first()
         if user is None:
             return jsonify({'message': 'User not found'}), 404
 

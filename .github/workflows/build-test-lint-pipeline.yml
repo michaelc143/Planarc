@@ -42,7 +42,7 @@ jobs:
       - name: Run tests
         run: |
           cd ./backend
-          python3 -m unittest discover -s backend/tests -p "test_*.py" -v
+          python3 -m unittest discover -s tests -t . -p "test_*.py" -v
 
   lintFrontend:
     runs-on: ubuntu-latest

@@ -2,8 +2,24 @@
     "cSpell.words": [
         "backref",
         "dotenv",
+        "healthcheck",
+        "initdb",
         "jsonify",
+        "mysqladmin",
+        "ondelete",
         "onupdate",
-        "planarc"
-    ]
+        "planarc",
+        "prio",
+        "proot",
+        "uroot"
+    ],
+    "python.testing.unittestArgs": [
+        "-v",
+        "-s",
+        "./backend",
+        "-p",
+        "*_test.py"
+    ],
+    "python.testing.pytestEnabled": false,
+    "python.testing.unittestEnabled": true
 }

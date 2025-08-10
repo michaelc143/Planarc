@@ -1,6 +1,6 @@
 """ General API routes """
-from flask import Blueprint, jsonify, Response
 from typing import Tuple
+from flask import Blueprint, jsonify, Response
 
 api_bp = Blueprint('api', __name__)
 

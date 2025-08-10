@@ -1,8 +1,8 @@
 """ Authentication routes for the API """
 import os
+from typing import Tuple
 import sqlalchemy.exc
 import jwt
-from typing import Tuple
 from flask import Blueprint, Response, jsonify, request
 from models import db, User
 from werkzeug.security import generate_password_hash, check_password_hash

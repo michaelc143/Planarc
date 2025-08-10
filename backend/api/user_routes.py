@@ -1,7 +1,8 @@
 """ User management routes for the API """
 import sqlalchemy.exc
 from flask import Blueprint, jsonify, request
-from models import db, User
+from models import db, User, UserDefaults
+import json
 from auth_middleware import token_required
 
 user_bp = Blueprint('users', __name__)
@@ -104,4 +105,65 @@ def get_current_user_profile(current_user):
             'role': getattr(current_user, 'role', 'user')
         }), 200
     except sqlalchemy.exc.SQLAlchemyError:
+        return jsonify({'message': 'Internal server error'}), 500
+
+@user_bp.route('/users/defaults', methods=['GET'])
+@token_required
+def get_user_defaults(current_user):
+    """Get current user's default statuses and priorities for new boards"""
+    try:
+        uds = UserDefaults.query.filter_by(user_id=current_user.id).first()
+        statuses = []
+        priorities = []
+        if uds and uds.default_statuses:
+            try:
+                parsed = json.loads(uds.default_statuses)
+                if isinstance(parsed, list):
+                    statuses = [str(x) for x in parsed]
+            except Exception:
+                statuses = []
+        if uds and uds.default_priorities:
+            try:
+                parsed = json.loads(uds.default_priorities)
+                if isinstance(parsed, list):
+                    priorities = [str(x) for x in parsed]
+            except Exception:
+                priorities = []
+        return jsonify({ 'statuses': statuses, 'priorities': priorities }), 200
+    except sqlalchemy.exc.SQLAlchemyError:
+        return jsonify({'message': 'Internal server error'}), 500
+
+@user_bp.route('/users/defaults', methods=['PUT'])
+@token_required
+def set_user_defaults(current_user):
+    """Set current user's default statuses and priorities for new boards"""
+    try:
+        payload = request.get_json() or {}
+        statuses = payload.get('statuses')
+        priorities = payload.get('priorities')
+        # sanitize lists
+        def sanitize(lst, max_len=50, max_items=20):
+            if not isinstance(lst, list):
+                return []
+            out = []
+            for x in lst:
+                if isinstance(x, str):
+                    s = x.strip()
+                    if s:
+                        out.append(s[:max_len])
+                if len(out) >= max_items:
+                    break
+            return out
+        statuses_s = sanitize(statuses)
+        priorities_s = sanitize(priorities)
+        uds = UserDefaults.query.filter_by(user_id=current_user.id).first()
+        if not uds:
+            uds = UserDefaults(user_id=current_user.id)
+            db.session.add(uds)
+        uds.default_statuses = json.dumps(statuses_s)
+        uds.default_priorities = json.dumps(priorities_s)
+        db.session.commit()
+        return jsonify({'message': 'Defaults saved'}), 200
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.session.rollback()
         return jsonify({'message': 'Internal server error'}), 500

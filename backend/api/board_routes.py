@@ -3,7 +3,8 @@ from datetime import datetime
 import sqlalchemy.exc
 from auth_middleware import token_required
 from flask import Blueprint, jsonify, request
-from models import Board, BoardPriority, BoardStatus, BoardTask, db
+from models import Board, BoardPriority, BoardStatus, BoardTask, UserDefaults, db
+import json
 
 board_bp = Blueprint('boards', __name__)
 
@@ -60,11 +61,34 @@ def create_board(current_user):
         db.session.add(board)
         db.session.commit()
         # seed default statuses for the board if none provided
-        defaults = data.get('statuses') or ['todo', 'in_progress', 'review', 'done']
+        defaults = data.get('statuses')
+        if not defaults:
+            # try per-user defaults
+            uds = UserDefaults.query.filter_by(user_id=current_user.id).first()
+            if uds and uds.default_statuses:
+                try:
+                    parsed = json.loads(uds.default_statuses)
+                    if isinstance(parsed, list) and parsed:
+                        defaults = [str(x) for x in parsed if isinstance(x, str) and x.strip()]
+                except Exception:
+                    defaults = None
+        if not defaults:
+            defaults = ['todo', 'in_progress', 'review', 'done']
         for idx, s in enumerate(defaults):
             db.session.add(BoardStatus(board_id=board.id, name=s, position=idx))
         # seed default priorities for the board if none provided
-        default_priorities = data.get('priorities') or ['low', 'medium', 'high', 'critical']
+        default_priorities = data.get('priorities')
+        if not default_priorities:
+            uds = UserDefaults.query.filter_by(user_id=current_user.id).first()
+            if uds and uds.default_priorities:
+                try:
+                    parsed = json.loads(uds.default_priorities)
+                    if isinstance(parsed, list) and parsed:
+                        default_priorities = [str(x) for x in parsed if isinstance(x, str) and x.strip()]
+                except Exception:
+                    default_priorities = None
+        if not default_priorities:
+            default_priorities = ['low', 'medium', 'high', 'critical']
         for idx, p in enumerate(default_priorities):
             db.session.add(BoardPriority(board_id=board.id, name=p, position=idx))
         db.session.commit()

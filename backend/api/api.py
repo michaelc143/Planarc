@@ -36,6 +36,21 @@ with app.app_context():
             db.session.commit()
         except Exception:
             db.session.rollback()
+        # ensure user_defaults table exists
+        try:
+            db.session.execute(text("""
+                CREATE TABLE IF NOT EXISTS user_defaults (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL UNIQUE,
+                    default_statuses TEXT,
+                    default_priorities TEXT,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_user_defaults_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
         # ensure board_priorities table exists
         try:
             db.session.execute(text("""

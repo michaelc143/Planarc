@@ -30,6 +30,17 @@ class Board(db.Model):
 
     owner = db.relationship('User', backref=db.backref('boards', lazy=True))
 
+class UserDefaults(db.Model):
+    """ Per-user defaults for new boards """
+    __tablename__ = 'user_defaults'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, unique=True)
+    default_statuses = db.Column(db.Text)  # JSON encoded list of strings
+    default_priorities = db.Column(db.Text)  # JSON encoded list of strings
+    updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+
+    user = db.relationship('User', backref=db.backref('defaults', lazy=True, cascade="all, delete-orphan"))
+
 class BoardStatus(db.Model):
     """ Custom statuses per board """
     __tablename__ = 'board_statuses'

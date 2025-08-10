@@ -80,3 +80,28 @@ Response shape:
   position: number
 }
 ```
+
+## Board Priorities (Per-board custom priorities)
+
+- GET `/boards/:board_id/priorities` — list priorities for a board, ordered by position.
+- POST `/boards/:board_id/priorities` — create a new priority.
+  - Body: `{ name: string }` — must be unique per board.
+- PUT `/boards/:board_id/priorities/:priority_id` — rename or reposition a priority.
+  - Body: `{ name?: string, position?: number }` — renaming updates tasks using the old name.
+- DELETE `/boards/:board_id/priorities/:priority_id` — delete a priority. Tasks are moved to a fallback (first priority or `medium`).
+
+Response shape:
+
+```json
+{
+  id: number,
+  name: string,
+  position: number
+}
+```
+
+## User Defaults for New Boards
+
+- GET `/users/defaults` — get current user's default statuses and priorities used when creating new boards.
+- PUT `/users/defaults` — set default lists.
+  - Body: `{ statuses: string[], priorities: string[] }` — empty arrays allowed.

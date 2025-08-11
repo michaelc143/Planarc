@@ -869,6 +869,7 @@ def get_active_sprint(current_user, board_id) -> Tuple[Response, int]:
 @board_bp.route('/boards/templates', methods=['GET'])
 @token_required
 def list_board_templates(current_user) -> Tuple[Response, int]:
+    # TODO: Make so kanban basic and scrum sprint are defaults for every user, add sql table, add model if needed, wire up
     templates = [
         {
             'id': 'kanban-basic',

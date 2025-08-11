@@ -173,6 +173,7 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 	const [bulkAssignee, setBulkAssignee] = useState<string>("");
 	const [bulkEstimate, setBulkEstimate] = useState<string>("");
 	const [bulkLabels, setBulkLabels] = useState<string>("");
+	const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
 
 	const toggleSelect = (id: number) => {
 		setSelected(prev => {
@@ -291,6 +292,15 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 			setFocusEstimateNext(null);
 		}
 	}, [editingId, focusEstimateNext]);
+
+	// Close open menus on outside click or ESC
+	useEffect(() => {
+		const onDocClick = () => setMenuOpenId(null);
+		const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setMenuOpenId(null); } };
+		document.addEventListener("click", onDocClick);
+		document.addEventListener("keydown", onKey);
+		return () => { document.removeEventListener("click", onDocClick); document.removeEventListener("keydown", onKey); };
+	}, []);
 
 	const onDragStart = (t: BoardTask) => (e: React.DragEvent) => {
 		setDragged(t);
@@ -584,13 +594,54 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 																onChange={() => toggleSelect(t.id)}
 															/>
 														)}
-														<div className="font-medium flex items-center justify-between">
+														<div className="font-medium flex items-center justify-between pr-8">
 															<span>{t.title} <span className="text-xs text-gray-500">[{t.priority}]</span></span>
-															<div className="text-xs space-x-2">
-																<button className="underline" onClick={() => startEdit(t)}>Edit</button>
-																<button className="underline text-red-600" onClick={() => deleteTask(t.id)}>Delete</button>
-															</div>
 														</div>
+														{/* Top-right actions: checkbox in bulk mode, kebab menu otherwise */}
+														{bulkMode ? (
+															<input
+																type="checkbox"
+																className="absolute top-1 right-1"
+																checked={selected.has(t.id)}
+																onChange={() => toggleSelect(t.id)}
+															/>
+														) : (
+															<div className="absolute top-1 right-1 w-7 z-10">
+																<button
+																	aria-label="Task actions"
+																	aria-haspopup="menu"
+																	aria-expanded={menuOpenId === t.id}
+																	aria-controls={`task-menu-${t.id}`}
+																	className="w-7 h-7 rounded hover:bg-gray-100 flex items-center justify-center text-gray-600"
+																	onClick={(e) => { e.stopPropagation(); setMenuOpenId(prev => prev === t.id ? null : t.id); }}
+																>
+																	<span aria-hidden>⋮</span>
+																</button>
+																{menuOpenId === t.id && (
+																	<div
+																		id={`task-menu-${t.id}`}
+																		role="menu"
+																		className="absolute right-0 top-full mt-1 bg-white border rounded shadow-lg py-1 text-sm min-w-[8rem] z-20"
+																		onClick={(e) => e.stopPropagation()}
+																	>
+																		<button
+																			role="menuitem"
+																			className="w-full text-left px-3 py-1 hover:bg-gray-100"
+																			onClick={() => { setMenuOpenId(null); startEdit(t); }}
+																		>
+																			Edit
+																		</button>
+																		<button
+																			role="menuitem"
+																			className="w-full text-left px-3 py-1 hover:bg-gray-100 text-red-600"
+																			onClick={() => { setMenuOpenId(null); deleteTask(t.id); }}
+																		>
+																			Delete
+																		</button>
+																	</div>
+																)}
+															</div>
+														)}
 														<div className="text-sm text-gray-600">{t.description}</div>
 														{t.sprint_id != null && (
 															<div className="mt-1 text-xs">
@@ -631,12 +682,7 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 																	? (typeof t.estimate === "number" ? (<span>Used: {t.effort_used} / Est: {t.estimate}</span>) : (<span>Used: {t.effort_used}</span>))
 																	: (typeof t.estimate === "number" ? (<span>Estimate: {t.estimate}</span>) : null)
 																}
-																<button
-																	className="ml-2 underline text-blue-600"
-																	onClick={() => { setFocusEstimateNext(t.id); startEdit(t); }}
-																>
-													Change
-																</button>
+																{/* TODO: Add effort used / estimate progress bar */}
 															</div>
 														)}
 													</div>

@@ -52,8 +52,11 @@ describe("BoardKanban", () => {
 		// estimate is shown for T1
 		expect(screen.getByText(/Estimate:\s*3/i)).toBeInTheDocument();
 
-		// edit T1
-		await userEvent.click(screen.getAllByText("Edit")[0]);
+		// open actions menu on T1 and click Edit
+		const t1 = await screen.findByText("T1");
+		const t1Card = t1.closest("[draggable=\"true\"]") as HTMLElement;
+		await userEvent.click(within(t1Card).getByLabelText(/Task actions/i));
+		await userEvent.click(within(t1Card).getByRole("menuitem", { name: /Edit/i }));
 		const titleInput = screen.getByDisplayValue("T1");
 		await userEvent.clear(titleInput);
 		await userEvent.type(titleInput, "T1+");
@@ -77,11 +80,11 @@ describe("BoardKanban", () => {
 		expect((boardService.updateTask as jest.Mock).mock.calls[0][2]).toEqual(expect.objectContaining({ estimate: 8, effort_used: 5 }));
 		await waitFor(() => expect(boardService.reorderTasks).toHaveBeenCalled());
 
-		// delete T2 (target the delete inside the T2 card specifically)
+		// delete T2 via kebab menu
 		const t2 = await screen.findByText("T2");
-		const t2Card = t2.closest("[draggable=\"true\"]") as HTMLElement | null;
-		expect(t2Card).not.toBeNull();
-		await userEvent.click(within(t2Card as HTMLElement).getByText("Delete"));
+		const t2Card = t2.closest("[draggable=\"true\"]") as HTMLElement;
+		await userEvent.click(within(t2Card).getByLabelText(/Task actions/i));
+		await userEvent.click(within(t2Card).getByRole("menuitem", { name: /Delete/i }));
 		await waitFor(() => expect(boardService.deleteTask).toHaveBeenCalledWith(1, 2));
 	});
 });

@@ -112,7 +112,8 @@ export default function BoardBurndown(): React.JSX.Element {
 	};
 
 	const filteredTasks = useMemo(() => {
-		return timeframe === "current-sprint" ? tasks.filter(inSprint) : tasks;
+		const list = Array.isArray(tasks) ? tasks : [];
+		return timeframe === "current-sprint" ? list.filter(inSprint) : list;
 	}, [tasks, timeframe]);
 
 	const stats = useMemo(() => {
@@ -183,11 +184,18 @@ export default function BoardBurndown(): React.JSX.Element {
 					</select>
 				</div>
 				<div>
-					<button className="px-2 py-1 border rounded text-sm" onClick={() => setShowSprintEditor(v => !v)}>{showSprintEditor ? "Close sprint editor" : "Edit sprint"}</button>
+					<button
+						className="px-2 py-1 border rounded text-sm"
+						aria-expanded={showSprintEditor}
+						aria-controls="sprint-editor-panel"
+						onClick={() => setShowSprintEditor(v => !v)}
+					>
+						{showSprintEditor ? "Close sprint editor" : "Edit sprint"}
+					</button>
 				</div>
 			</div>
 			{showSprintEditor && (
-				<div className="mb-4 bg-white border rounded p-3 flex flex-wrap items-end gap-3">
+				<div id="sprint-editor-panel" className="mb-4 bg-white border rounded p-3 flex flex-wrap items-end gap-3">
 					<div>
 						<label htmlFor="sprint-start" className="block text-xs text-gray-700 mb-1">Sprint start</label>
 						<input id="sprint-start" type="date" className="border px-2 py-1 rounded" value={(sprintOverrideStartStr ?? fmtDate(sprint.start))} onChange={e => setSprintOverrideStartStr(e.target.value)} />
@@ -251,16 +259,25 @@ export default function BoardBurndown(): React.JSX.Element {
 
 					<div>
 						<div className="flex items-center justify-between mb-1 text-sm text-gray-600">
-							<span>Burndown Progress</span>
+							<span id="burndown-progress-label">Burndown Progress</span>
 							<span>{stats.pct}%</span>
 						</div>
-						<div className="h-3 w-full bg-gray-200 rounded">
+						<div
+							className="h-3 w-full bg-gray-200 rounded"
+							role="progressbar"
+							aria-labelledby="burndown-progress-label"
+							aria-valuemin={0}
+							aria-valuemax={100}
+							aria-valuenow={stats.pct}
+						>
 							<div className="h-3 bg-blue-600 rounded" style={{ width: `${stats.pct}%` }} />
 						</div>
 						{/* Trend chart: ideal vs actual (today) */}
 						<div className="mt-3 bg-white border rounded p-3">
 							<div className="text-xs text-gray-600 mb-1">Sprint trend (ideal vs actual today)</div>
-							<svg role="img" aria-label="Sprint trend chart" viewBox="0 0 110 50" className="w-full h-24">
+							<svg role="img" aria-label="Sprint trend chart" aria-labelledby="trend-title trend-desc" viewBox="0 0 110 50" className="w-full h-24">
+								<title id="trend-title">Sprint trend chart</title>
+								<desc id="trend-desc">Ideal burn line from start to end of sprint and today&apos;s remaining work point.</desc>
 								{/* axes */}
 								<line x1="8" y1="5" x2="8" y2="45" stroke="#9ca3af" strokeWidth="0.5" />
 								<line x1="8" y1="45" x2="105" y2="45" stroke="#9ca3af" strokeWidth="0.5" />

@@ -110,7 +110,7 @@ class BoardService {
 		return res.json();
 	}
 
-	async createTask(boardId: number, payload: Pick<BoardTask, "title" | "description" | "status" | "priority" | "assigned_to" | "due_date" | "estimate" | "effort_used">): Promise<BoardTask> {
+	async createTask(boardId: number, payload: Pick<BoardTask, "title" | "description" | "status" | "priority" | "assigned_to" | "due_date" | "estimate" | "effort_used"> & { sprint_id?: number | null }): Promise<BoardTask> {
 		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/tasks`, {
 			method: "POST",
 			headers: this.authHeaders(),
@@ -125,7 +125,7 @@ class BoardService {
 	async updateTask(
 		boardId: number,
 		taskId: number,
-		payload: Partial<Pick<BoardTask, "title" | "description" | "status" | "priority" | "assigned_to" | "due_date" | "position"> & { estimate?: number | null; effort_used?: number }>,
+		payload: Partial<Pick<BoardTask, "title" | "description" | "status" | "priority" | "assigned_to" | "due_date" | "position"> & { estimate?: number | null; effort_used?: number; sprint_id?: number | null }>,
 	): Promise<void> {
 		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/tasks/${taskId}`, {
 			method: "PUT",
@@ -155,6 +155,18 @@ class BoardService {
 		});
 		if (!res.ok) {
 			throw new Error((await res.json()).message || "Failed to reorder tasks");
+		}
+	}
+
+	// Bulk updates
+	async bulkUpdateTasks(boardId: number, task_ids: number[], changes: { status?: string; assigned_to?: number | null; labels?: string[] | string | null; estimate?: number | null }): Promise<void> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/tasks/bulk`, {
+			method: "POST",
+			headers: this.authHeaders(),
+			body: JSON.stringify({ task_ids, changes }),
+		});
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to bulk update tasks");
 		}
 	}
 
@@ -192,6 +204,66 @@ class BoardService {
 		if (!res.ok) {
 			throw new Error((await res.json()).message || "Failed to load templates");
 		}
+		return res.json();
+	}
+
+	// Sprints (multiple per board)
+	async listSprints(boardId: number): Promise<Array<{ id: number; name?: string; start_date: string; end_date: string; goal?: string; is_active: boolean }>> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/sprints`, { headers: this.authHeaders() });
+		if (!res.ok) { throw new Error((await res.json()).message || "Failed to fetch sprints"); }
+		return res.json();
+	}
+
+	async getActiveSprint(boardId: number): Promise<{ sprint: { id: number; name?: string; start_date: string; end_date: string; goal?: string; is_active: boolean } | null }> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/sprints/active`, { headers: this.authHeaders() });
+		if (!res.ok) { throw new Error((await res.json()).message || "Failed to fetch active sprint"); }
+		return res.json();
+	}
+
+	async createSprint(boardId: number, payload: { name?: string; start_date: string; end_date: string; goal?: string; is_active?: boolean }): Promise<{ id: number }> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/sprints`, {
+			method: "POST",
+			headers: this.authHeaders(),
+			body: JSON.stringify(payload),
+		});
+		if (!res.ok) { throw new Error((await res.json()).message || "Failed to create sprint"); }
+		return res.json();
+	}
+
+	async updateSprint(boardId: number, sprintId: number, payload: Partial<{ name: string; start_date: string; end_date: string; goal: string; is_active: boolean }>): Promise<void> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/sprints/${sprintId}`, {
+			method: "PUT",
+			headers: this.authHeaders(),
+			body: JSON.stringify(payload),
+		});
+		if (!res.ok) { throw new Error((await res.json()).message || "Failed to update sprint"); }
+	}
+
+	async deleteSprint(boardId: number, sprintId: number): Promise<void> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/sprints/${sprintId}`, { method: "DELETE", headers: this.authHeaders() });
+		if (!res.ok) { throw new Error((await res.json()).message || "Failed to delete sprint"); }
+	}
+
+	// Reports
+	async getBurnup(boardId: number): Promise<{ scope_total: number; completed_total: number; sprint_start?: string | null; sprint_end?: string | null }> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/reports/burnup`, { headers: this.authHeaders() });
+		if (!res.ok) { throw new Error((await res.json()).message || "Failed to load burn-up"); }
+		return res.json();
+	}
+
+	async getCFD(boardId: number): Promise<{ counts: Record<string, number> }> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/reports/cfd`, { headers: this.authHeaders() });
+		if (!res.ok) { throw new Error((await res.json()).message || "Failed to load CFD"); }
+		return res.json();
+	}
+
+	// Activity
+	async listActivity(boardId: number, filters?: { action?: string; entity_type?: string }): Promise<Array<{ id: number; board_id: number; user_id?: number; action: string; entity_type: string; entity_id?: number; before?: string; after?: string; created_at: string }>> {
+		const params = new URLSearchParams();
+		if (filters?.action) {params.append("action", filters.action);}
+		if (filters?.entity_type) {params.append("entity_type", filters.entity_type);}
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/activity?${params.toString()}`, { headers: this.authHeaders() });
+		if (!res.ok) { throw new Error((await res.json()).message || "Failed to load activity"); }
 		return res.json();
 	}
 

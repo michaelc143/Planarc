@@ -56,6 +56,25 @@ with app.app_context():
         db.session.commit()
     except sqlalchemy.exc.SQLAlchemyError:
         db.session.rollback()
+    # add labels column to board_tasks if missing
+    try:
+        db.session.execute(text("ALTER TABLE board_tasks ADD COLUMN labels VARCHAR(255) NULL"))
+        db.session.commit()
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.session.rollback()
+    # add sprint_id column to board_tasks if missing
+    try:
+        db.session.execute(text("ALTER TABLE board_tasks ADD COLUMN sprint_id INT NULL"))
+        db.session.commit()
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.session.rollback()
+    # ensure FK from board_tasks.sprint_id to board_sprints(id)
+    try:
+        # MySQL requires a named constraint to avoid duplicates between runs
+        db.session.execute(text("ALTER TABLE board_tasks ADD CONSTRAINT fk_task_sprint FOREIGN KEY (sprint_id) REFERENCES board_sprints(id) ON DELETE SET NULL"))
+        db.session.commit()
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.session.rollback()
     try:
         db.session.execute(text("CREATE INDEX idx_board_tasks_board_status_position ON board_tasks (board_id, status, position)"))
         db.session.commit()
@@ -64,6 +83,17 @@ with app.app_context():
         # Best-effort migrations for Kanban position + index and custom statuses
         try:
             db.session.execute(text("ALTER TABLE board_tasks ADD COLUMN position INT DEFAULT 0"))
+            db.session.commit()
+        except sqlalchemy.exc.SQLAlchemyError:
+            db.session.rollback()
+        # add sprint dates to boards if missing
+        try:
+            db.session.execute(text("ALTER TABLE boards ADD COLUMN sprint_start DATE NULL"))
+            db.session.commit()
+        except sqlalchemy.exc.SQLAlchemyError:
+            db.session.rollback()
+        try:
+            db.session.execute(text("ALTER TABLE boards ADD COLUMN sprint_end DATE NULL"))
             db.session.commit()
         except sqlalchemy.exc.SQLAlchemyError:
             db.session.rollback()
@@ -155,6 +185,44 @@ with app.app_context():
                     CONSTRAINT fk_dep_board FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE,
                     CONSTRAINT fk_dep_blocker FOREIGN KEY (blocker_task_id) REFERENCES board_tasks(id) ON DELETE CASCADE,
                     CONSTRAINT fk_dep_blocked FOREIGN KEY (blocked_task_id) REFERENCES board_tasks(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """))
+            db.session.commit()
+        except sqlalchemy.exc.SQLAlchemyError:
+            db.session.rollback()
+        # ensure activity_logs table exists
+        try:
+            db.session.execute(text("""
+                CREATE TABLE IF NOT EXISTS activity_logs (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    board_id INT NOT NULL,
+                    user_id INT NULL,
+                    action VARCHAR(50) NOT NULL,
+                    entity_type VARCHAR(50) NOT NULL,
+                    entity_id INT NULL,
+                    before TEXT NULL,
+                    after TEXT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_act_board FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE,
+                    CONSTRAINT fk_act_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """))
+            db.session.commit()
+        except sqlalchemy.exc.SQLAlchemyError:
+            db.session.rollback()
+        # ensure board_sprints table exists (multiple sprints per board)
+        try:
+            db.session.execute(text("""
+                CREATE TABLE IF NOT EXISTS board_sprints (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    board_id INT NOT NULL,
+                    name VARCHAR(100) NULL,
+                    start_date DATE NOT NULL,
+                    end_date DATE NOT NULL,
+                    goal TEXT NULL,
+                    is_active TINYINT DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_board_sprints_board FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """))
             db.session.commit()

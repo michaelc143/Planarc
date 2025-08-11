@@ -1,7 +1,7 @@
 """ Models for the app backend """
 from __future__ import annotations
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import String, Integer, Text, ForeignKey, DateTime, Date
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -49,16 +49,21 @@ class Board(db.Model):
     owner_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+    # Persist sprint date range for burndown/burn-up across devices
+    sprint_start: Mapped[Optional[date]] = mapped_column(Date, nullable=True, default=None)
+    sprint_end: Mapped[Optional[date]] = mapped_column(Date, nullable=True, default=None)
     # Optional background color for the board UI (e.g. hex like #ffffff)
     background_color: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None)
 
     owner: Mapped['User'] = relationship('User', backref=db.backref('boards', lazy=True))
 
-    def __init__(self, name, description, owner_id, background_color: Optional[str] = None):
+    def __init__(self, name, description, owner_id, background_color: Optional[str] = None, sprint_start: Optional[date] = None, sprint_end: Optional[date] = None):
         self.name = name
         self.description = description
         self.owner_id = owner_id
         self.background_color = background_color
+        self.sprint_start = sprint_start
+        self.sprint_end = sprint_end
 
 class UserDefaults(db.Model):
     """ Per-user defaults for new boards
@@ -162,9 +167,11 @@ class BoardTask(db.Model):
     # priority becomes a free-form string tied to BoardPriority.name
     priority: Mapped[str] = mapped_column(String(50), default='medium')
     board_id: Mapped[int] = mapped_column(ForeignKey('boards.id', ondelete='CASCADE'))
+    # Optional sprint association
+    sprint_id: Mapped[Optional[int]] = mapped_column(ForeignKey('board_sprints.id', ondelete='SET NULL'), nullable=True)
     assigned_to: Mapped[Optional[int]] = mapped_column(ForeignKey('users.id'), nullable=True)
     created_by: Mapped[int] = mapped_column(ForeignKey('users.id'))
-    due_date: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True)
+    due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     position: Mapped[int] = mapped_column(Integer, default=0)  # Order within its status column
     # Optional estimate of effort (e.g., story points)
     estimate: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
@@ -172,12 +179,14 @@ class BoardTask(db.Model):
     effort_used: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+    # optional labels stored as CSV for simplicity
+    labels: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, default=None)
 
     board: Mapped['Board'] = relationship('Board', backref=db.backref('tasks', lazy=True, cascade="all, delete-orphan"))
     assignee: Mapped['User'] = relationship('User', foreign_keys=[assigned_to], backref=db.backref('assigned_board_tasks', lazy=True))
     creator: Mapped['User'] = relationship('User', foreign_keys=[created_by], backref=db.backref('created_board_tasks', lazy=True))
 
-    def __init__(self, title, description, assigned_to, created_by, due_date, position, status, priority, board_id, estimate=None, effort_used: Optional[int] | None = 0):
+    def __init__(self, title, description, assigned_to, created_by, due_date, position, status, priority, board_id, estimate=None, effort_used: Optional[int] | None = 0, labels: Optional[str] = None, sprint_id: Optional[int] = None):
         self.title = title
         self.description = description
         self.assigned_to = assigned_to
@@ -189,6 +198,8 @@ class BoardTask(db.Model):
         self.board_id = board_id
         self.estimate = estimate
         self.effort_used = effort_used
+        self.labels = labels
+        self.sprint_id = sprint_id
 
 class BoardMember(db.Model):
     """ Membership for boards
@@ -243,3 +254,53 @@ class TaskDependency(db.Model):
         self.board_id = board_id
         self.blocker_task_id = blocker_task_id
         self.blocked_task_id = blocked_task_id
+
+class BoardSprint(db.Model):
+    """Multiple sprints per board"""
+    __tablename__ = 'board_sprints'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    board_id: Mapped[int] = mapped_column(ForeignKey('boards.id', ondelete='CASCADE'), nullable=False)
+    name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, default=None)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    goal: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
+    is_active: Mapped[int] = mapped_column(Integer, default=0)  # 0/1
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp())
+
+    board: Mapped['Board'] = relationship('Board', backref=db.backref('sprints', lazy=True, cascade="all, delete-orphan"))
+
+    def __init__(self, board_id: int, start_date: date, end_date: date, name: Optional[str] = None, goal: Optional[str] = None, is_active: int = 0):
+        self.board_id = board_id
+        self.start_date = start_date
+        self.end_date = end_date
+        self.name = name
+        self.goal = goal
+        self.is_active = is_active
+
+# Activity / Audit log
+class ActivityLog(db.Model):
+    """Audit trail for changes on boards and tasks"""
+    __tablename__ = 'activity_logs'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    board_id: Mapped[int] = mapped_column(ForeignKey('boards.id', ondelete='CASCADE'), nullable=False)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    action: Mapped[str] = mapped_column(String(50), nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    before: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    after: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp())
+
+    board: Mapped['Board'] = relationship('Board', backref=db.backref('activity_logs', lazy=True, cascade="all, delete-orphan"))
+    user: Mapped['User'] = relationship('User')
+
+    def __init__(self, board_id: int, user_id: Optional[int], action: str, entity_type: str, entity_id: Optional[int] = None, before: Optional[str] = None, after: Optional[str] = None):
+        self.board_id = board_id
+        self.user_id = user_id
+        self.action = action
+        self.entity_type = entity_type
+        self.entity_id = entity_id
+        self.before = before
+        self.after = after

@@ -12,6 +12,7 @@ jest.mock("../../services/board-service", () => ({
 			{ id: 3, name: "review", position: 2 },
 			{ id: 4, name: "done", position: 3 },
 		]),
+		listMembers: jest.fn().mockResolvedValue([]),
 		reorderTasks: jest.fn(),
 		updateTask: jest.fn(),
 		deleteTask: jest.fn(),
@@ -21,6 +22,9 @@ jest.mock("../../services/board-service", () => ({
 			{ id: 3, name: "high", position: 2 },
 			{ id: 4, name: "critical", position: 3 },
 		]),
+		listSprints: jest.fn().mockResolvedValue([
+			{ id: 10, start_date: "2025-01-01", end_date: "2025-01-14", is_active: true },
+		]),
 	},
 }));
 
@@ -28,7 +32,8 @@ import boardService from "../../services/board-service";
 
 describe("BoardKanban", () => {
 	beforeEach(() => {
-		jest.resetAllMocks();
+		// Preserve mock implementations defined in jest.mock while clearing call history
+		jest.clearAllMocks();
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		(window as any).confirm = jest.fn(() => true);
 	});
@@ -55,6 +60,7 @@ describe("BoardKanban", () => {
 		// change status to in_progress (triggers reorder API in save)
 		const selects = screen.getAllByRole("combobox");
 		await userEvent.selectOptions(selects[1], "in_progress");
+		// sprint selection is exercised in BoardDetail create flow; skip here to avoid async flake
 		// change estimate to 8
 		const estimateInput = screen.getByLabelText(/Estimate \(points\)/i);
 		await userEvent.clear(estimateInput);

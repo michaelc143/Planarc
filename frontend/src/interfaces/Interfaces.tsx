@@ -82,6 +82,7 @@ export type BoardTask = {
   status: string;
   priority: string;
   board_id: number;
+  sprint_id?: number | null;
   assigned_to?: number;
   created_by: number;
   due_date?: string;

@@ -17,8 +17,12 @@ export default function BoardBurndown(): React.JSX.Element {
 	const [showSprintEditor, setShowSprintEditor] = useState(false);
 	const [sprintOverrideStartStr, setSprintOverrideStartStr] = useState<string | null>(null);
 	const [sprintOverrideEndStr, setSprintOverrideEndStr] = useState<string | null>(null);
+	const [activeSprint, setActiveSprint] = useState<{ id: number; start_date: string; end_date: string } | null>(null);
+	const [sprints, setSprints] = useState<Array<{ id: number; name?: string; start_date: string; end_date: string; is_active: boolean }>>([]);
+	const [selectedSprintId, setSelectedSprintId] = useState<number | null>(null);
+	const [savingSprint, setSavingSprint] = useState(false);
 
-	// Derive a simple 2-week current sprint starting this week's Monday; allow override via sprint editor
+	// Prefer server active sprint; otherwise derive a 2-week current sprint starting this week's Monday; allow override via sprint editor
 	const sprint = useMemo(() => {
 		const now = new Date();
 		const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
@@ -36,6 +40,18 @@ export default function BoardBurndown(): React.JSX.Element {
 		};
 		let start = baseStart;
 		let end = baseEnd;
+
+		// If a specific sprint is selected, prefer its dates
+		if (selectedSprintId != null) {
+			const picked = sprints.find(s => s.id === selectedSprintId);
+			if (picked?.start_date && picked?.end_date) {
+				const ps = parseIso(picked.start_date);
+				const pe = parseIso(picked.end_date);
+				if (ps && pe && ps.getTime() <= pe.getTime()) {
+					start = ps; end = pe;
+				}
+			}
+		}
 		if (sprintOverrideStartStr && sprintOverrideEndStr) {
 			const ps = parseIso(sprintOverrideStartStr);
 			const pe = parseIso(sprintOverrideEndStr);
@@ -44,8 +60,17 @@ export default function BoardBurndown(): React.JSX.Element {
 				end = pe;
 			}
 		}
+		// server active sprint overrides default window when not manually overridden
+		if (!sprintOverrideStartStr && !sprintOverrideEndStr && selectedSprintId == null && activeSprint?.start_date && activeSprint?.end_date) {
+			const ps = parseIso(activeSprint.start_date);
+			const pe = parseIso(activeSprint.end_date);
+			if (ps && pe && ps.getTime() <= pe.getTime()) {
+				start = ps;
+				end = pe;
+			}
+		}
 		return { start, end };
-	}, [sprintOverrideStartStr, sprintOverrideEndStr]);
+	}, [sprintOverrideStartStr, sprintOverrideEndStr, activeSprint, selectedSprintId, sprints]);
 
 	const fmtDate = (date: Date) => {
 		const y = date.getUTCFullYear();
@@ -68,6 +93,23 @@ export default function BoardBurndown(): React.JSX.Element {
 			} finally {
 				setLoading(false);
 			}
+		})();
+		// Load sprint list and active sprint
+		(async () => {
+			try {
+				const [all, active] = await Promise.all([
+					boardService.listSprints(id).catch(() => []),
+					boardService.getActiveSprint(id).catch(() => ({ sprint: null })),
+				]);
+				if (Array.isArray(all)) { setSprints(all); }
+				if (active?.sprint?.start_date && active?.sprint?.end_date) {
+					setActiveSprint({ id: active.sprint.id, start_date: active.sprint.start_date, end_date: active.sprint.end_date });
+					setSelectedSprintId(active.sprint.id);
+				} else if (Array.isArray(all) && all.length) {
+					// default to most recent sprint if none active
+					setSelectedSprintId(all[0].id);
+				}
+			} catch { /* ignore */ }
 		})();
 		// Load any saved sprint override for this board
 		try {
@@ -168,7 +210,32 @@ export default function BoardBurndown(): React.JSX.Element {
 		<div className="p-4 max-w-screen-lg mx-auto">
 			<div className="flex items-center justify-between mb-4">
 				<Link to={`/boards/${id}`} className="text-blue-600 hover:underline">← Back to Board</Link>
-				<div className="text-sm text-gray-600">Board: <span className="font-medium">{board?.name}</span></div>
+				<div className="flex items-center gap-3">
+					<div className="text-sm text-gray-600">Board: <span className="font-medium">{board?.name}</span></div>
+					{/* Sprint selector */}
+					<div className="text-sm">
+						<label htmlFor="sprint-select" className="mr-2">Sprint:</label>
+						<select
+							id="sprint-select"
+							className="border px-2 py-1 rounded"
+							value={selectedSprintId != null ? String(selectedSprintId) : ""}
+							onChange={(e) => {
+								const val = e.target.value;
+								setSelectedSprintId(val ? Number(val) : null);
+								// clear manual overrides when switching sprints
+								setSprintOverrideStartStr(null);
+								setSprintOverrideEndStr(null);
+							}}
+						>
+							<option value="">(default window)</option>
+							{sprints.map(s => (
+								<option key={s.id} value={String(s.id)}>
+									{(s.name && s.name.trim()) ? s.name : `Sprint #${s.id}`} — {s.start_date} → {s.end_date}{s.is_active ? " (active)" : ""}
+								</option>
+							))}
+						</select>
+					</div>
+				</div>
 			</div>
 			<h1 className="text-2xl font-bold mb-2">Burndown & Effort</h1>
 			<div className="flex flex-wrap items-center gap-3 mb-3">
@@ -183,7 +250,7 @@ export default function BoardBurndown(): React.JSX.Element {
 						<option value="all">All tasks</option>
 					</select>
 				</div>
-				<div>
+				<div className="flex items-center gap-2">
 					<button
 						className="px-2 py-1 border rounded text-sm"
 						aria-expanded={showSprintEditor}
@@ -191,6 +258,25 @@ export default function BoardBurndown(): React.JSX.Element {
 						onClick={() => setShowSprintEditor(v => !v)}
 					>
 						{showSprintEditor ? "Close sprint editor" : "Edit sprint"}
+					</button>
+					<button
+						className="px-2 py-1 border rounded text-sm"
+						onClick={async () => {
+							try {
+								const start = fmtDate(new Date());
+								const end = fmtDate(new Date(Date.now() + 13 * 24 * 3600 * 1000));
+								const created = await boardService.createSprint(id, { start_date: start, end_date: end, is_active: true });
+								setActiveSprint({ id: created.id, start_date: start, end_date: end });
+								// refresh sprints and select the new one
+								try { const all = await boardService.listSprints(id); setSprints(all); } catch { /* ignore */ }
+								setSelectedSprintId(created.id);
+								showToast("Sprint created and set active", "success");
+							} catch (e) {
+								showToast(e instanceof Error ? e.message : "Failed to create sprint", "error");
+							}
+						}}
+					>
+						New sprint
 					</button>
 				</div>
 			</div>
@@ -206,19 +292,48 @@ export default function BoardBurndown(): React.JSX.Element {
 					</div>
 					<div className="flex gap-2">
 						<button
-							className="px-3 py-1 bg-blue-600 text-white rounded"
-							onClick={() => {
+							className="px-3 py-1 bg-blue-600 text-white rounded disabled:opacity-60"
+							disabled={savingSprint}
+							aria-busy={savingSprint}
+							onClick={async () => {
+								setSavingSprint(true);
 								try {
-									if (!sprintOverrideStartStr || !sprintOverrideEndStr) { return; }
-									const s = new Date(sprintOverrideStartStr);
-									const e = new Date(sprintOverrideEndStr);
+									// Use overrides if provided; otherwise fall back to current sprint window
+									const startStr = sprintOverrideStartStr ?? fmtDate(sprint.start);
+									const endStr = sprintOverrideEndStr ?? fmtDate(sprint.end);
+									const s = new Date(startStr);
+									const e = new Date(endStr);
 									if (isNaN(s.getTime()) || isNaN(e.getTime()) || s > e) { return; }
-									localStorage.setItem(`planarc:board:${id}:sprintRange`, JSON.stringify({ start: sprintOverrideStartStr, end: sprintOverrideEndStr }));
+									// Update selected sprint if chosen; otherwise update active or create a new active sprint
+									if (selectedSprintId != null) {
+										await boardService.updateSprint(id, selectedSprintId, { start_date: startStr, end_date: endStr });
+										// reflect locally in sprints list
+										setSprints(prev => prev.map(sp => sp.id === selectedSprintId ? { ...sp, start_date: startStr, end_date: endStr } : sp));
+										if (activeSprint?.id === selectedSprintId) {
+											setActiveSprint({ ...activeSprint, start_date: startStr, end_date: endStr });
+										}
+									} else if (activeSprint?.id) {
+										await boardService.updateSprint(id, activeSprint.id, { start_date: startStr, end_date: endStr });
+										setActiveSprint({ ...activeSprint, start_date: startStr, end_date: endStr });
+									} else {
+										const created = await boardService.createSprint(id, { start_date: startStr, end_date: endStr, is_active: true });
+										setActiveSprint({ id: created.id, start_date: startStr, end_date: endStr });
+										try { const all = await boardService.listSprints(id); setSprints(all); } catch { /* ignore */ }
+										setSelectedSprintId(created.id);
+									}
 									showToast("Sprint updated", "success");
-								} catch { /* ignore */ }
+									// Clear manual overrides so UI reflects server state
+									setSprintOverrideStartStr(null);
+									setSprintOverrideEndStr(null);
+								} catch (e) {
+									const msg = e instanceof Error ? e.message : "Failed to update sprint";
+									showToast(msg, "error");
+								} finally {
+									setSavingSprint(false);
+								}
 							}}
 						>
-							Save
+							{savingSprint ? "Saving…" : "Save"}
 						</button>
 						<button
 							className="px-3 py-1 border rounded"

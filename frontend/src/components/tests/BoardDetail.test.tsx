@@ -12,6 +12,7 @@ jest.mock("../../services/board-service", () => ({
 		getBoard: jest.fn(),
 		listTasks: jest.fn(),
 		listStatuses: jest.fn(),
+		listSprints: jest.fn(),
 		updateBoard: jest.fn(),
 		createTask: jest.fn(),
 	},
@@ -68,6 +69,10 @@ describe("BoardDetail", () => {
 			{ id: 4, name: "done", position: 3 },
 		]);
 		(boardService.updateBoard as jest.Mock).mockResolvedValueOnce(undefined);
+		(boardService.listSprints as jest.Mock).mockResolvedValueOnce([
+			{ id: 10, start_date: "2025-01-01", end_date: "2025-01-14", is_active: true },
+			{ id: 11, start_date: "2025-01-15", end_date: "2025-01-28", is_active: false },
+		]);
 		(boardService.createTask as jest.Mock).mockResolvedValueOnce({ id: 12, title: "NewT", description: "nd", status: "todo", priority: "medium", estimate: 5, board_id: 1, created_by: 1, created_at: "" });
 
 		renderWithAuth(<BoardDetail />);
@@ -92,10 +97,13 @@ describe("BoardDetail", () => {
 		await userEvent.type(screen.getByPlaceholderText(/Description/i), "nd");
 		// set estimate
 		await userEvent.type(screen.getByPlaceholderText(/e\.g\. 3/i), "5");
+		// pick a sprint
+		const sprintSelect = screen.getByLabelText(/Sprint/i);
+		await userEvent.selectOptions(sprintSelect, "10");
 		await userEvent.click(screen.getByRole("button", { name: /Add Task/i }));
 		await waitFor(() => expect(boardService.createTask).toHaveBeenCalled());
 		// ensure estimate persisted in payload
-		expect((boardService.createTask as jest.Mock).mock.calls[0][1]).toEqual(expect.objectContaining({ estimate: 5 }));
+		expect((boardService.createTask as jest.Mock).mock.calls[0][1]).toEqual(expect.objectContaining({ estimate: 5, sprint_id: 10 }));
 		await waitFor(() => expect(screen.getByTestId("kanban")).toHaveTextContent("Tasks: 2"));
 	});
 });

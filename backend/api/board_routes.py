@@ -5,7 +5,7 @@ from typing import Tuple
 import sqlalchemy.exc
 from auth_middleware import token_required
 from flask import Blueprint, jsonify, request, Response
-from models import Board, BoardPriority, BoardStatus, BoardTask, UserDefaults, BoardMember, User, TaskDependency, db
+from models import Board, BoardPriority, BoardStatus, BoardTask, UserDefaults, BoardMember, User, TaskDependency, ActivityLog, BoardSprint, db
 from sqlalchemy import select, or_
 
 board_bp = Blueprint('boards', __name__)
@@ -283,6 +283,7 @@ def list_board_tasks(current_user, board_id) -> Tuple[Response, int]:
                 'priority': task.priority,
                 'board_id': task.board_id,
                 'assigned_to': task.assigned_to,
+                'sprint_id': getattr(task, 'sprint_id', None),
                 'created_by': task.created_by,
                 'due_date': task.due_date.isoformat() if task.due_date else None,
                 'estimate': task.estimate,
@@ -342,10 +343,16 @@ def create_board_task(current_user, board_id) -> Tuple[Response, int]:
             due_date=_parse_date(data.get('due_date')),
             position=next_pos,
             estimate=(int(data['estimate']) if 'estimate' in data and isinstance(data['estimate'], (int, str)) and str(data['estimate']).isdigit() else None),
-            effort_used=(int(data['effort_used']) if 'effort_used' in data and isinstance(data['effort_used'], (int, str)) and str(data['effort_used']).isdigit() else 0)
+            effort_used=(int(data['effort_used']) if 'effort_used' in data and isinstance(data['effort_used'], (int, str)) and str(data['effort_used']).isdigit() else 0),
+            sprint_id=(int(data['sprint_id']) if 'sprint_id' in data and isinstance(data['sprint_id'], (int, str)) and str(data['sprint_id']).isdigit() else None)
         )
         db.session.add(task)
         db.session.commit()
+        try:
+            db.session.add(ActivityLog(board_id=board.id, user_id=current_user.id, action='create', entity_type='task', entity_id=task.id, before=None, after=json.dumps({'title': task.title})))
+            db.session.commit()
+        except sqlalchemy.exc.SQLAlchemyError:
+            db.session.rollback()
         return jsonify({
             'id': task.id,
             'title': task.title,
@@ -354,6 +361,7 @@ def create_board_task(current_user, board_id) -> Tuple[Response, int]:
             'priority': task.priority,
             'board_id': task.board_id,
             'assigned_to': task.assigned_to,
+            'sprint_id': getattr(task, 'sprint_id', None),
             'created_by': task.created_by,
             'due_date': task.due_date.isoformat() if task.due_date else None,
             'estimate': task.estimate,
@@ -382,6 +390,15 @@ def update_board_task(current_user, board_id, task_id) -> Tuple[Response, int]:
         if not task:
             return jsonify({'message': 'Task not found'}), 404
         data: dict = request.get_json() or {}
+        before_snapshot = {
+            'title': task.title,
+            'description': task.description,
+            'status': task.status,
+            'priority': task.priority,
+            'assigned_to': task.assigned_to,
+            'estimate': task.estimate,
+            'effort_used': task.effort_used
+        }
         for field in ['title', 'description', 'status', 'priority', 'assigned_to', 'estimate', 'effort_used']:
             if field in data:
                 # if changing to a new status ensure it exists
@@ -408,9 +425,19 @@ def update_board_task(current_user, board_id, task_id) -> Tuple[Response, int]:
                     task.effort_used = int(val2) if isinstance(val2, (int, str)) and str(val2).isdigit() else 0
                 else:
                     setattr(task, field, data[field])
+        if 'sprint_id' in data:
+            try:
+                task.sprint_id = int(data['sprint_id']) if data['sprint_id'] is not None else None
+            except (TypeError, ValueError):
+                task.sprint_id = None
         if 'due_date' in data:
             task.due_date = _parse_date(data.get('due_date'))
         db.session.commit()
+        try:
+            db.session.add(ActivityLog(board_id=board.id, user_id=current_user.id, action='update', entity_type='task', entity_id=task.id, before=json.dumps(before_snapshot), after=json.dumps(data)))
+            db.session.commit()
+        except sqlalchemy.exc.SQLAlchemyError:
+            db.session.rollback()
         return jsonify({'message': 'Task updated'}), 200
     except sqlalchemy.exc.SQLAlchemyError:
         db.session.rollback()
@@ -431,6 +458,11 @@ def delete_board_task(current_user, board_id, task_id) -> Tuple[Response, int]:
             return jsonify({'message': 'Task not found'}), 404
         db.session.delete(task)
         db.session.commit()
+        try:
+            db.session.add(ActivityLog(board_id=board.id, user_id=current_user.id, action='delete', entity_type='task', entity_id=task.id, before=json.dumps({'title': task.title}), after=None))
+            db.session.commit()
+        except sqlalchemy.exc.SQLAlchemyError:
+            db.session.rollback()
         return jsonify({'message': 'Task deleted'}), 200
     except sqlalchemy.exc.SQLAlchemyError:
         db.session.rollback()
@@ -483,6 +515,11 @@ def reorder_tasks(current_user, board_id) -> Tuple[Response, int]:
             for idx, t in enumerate(new_order):
                 t.position = idx
         db.session.commit()
+        try:
+            db.session.add(ActivityLog(board_id=board.id, user_id=current_user.id, action='reorder', entity_type='task', entity_id=None, before=None, after=json.dumps({'moves': moves})))
+            db.session.commit()
+        except sqlalchemy.exc.SQLAlchemyError:
+            db.session.rollback()
         return jsonify({'message': 'Reordered'}), 200
     except sqlalchemy.exc.SQLAlchemyError:
         db.session.rollback()
@@ -556,6 +593,270 @@ def delete_dependency(current_user, board_id, dep_id) -> Tuple[Response, int]:
     db.session.delete(dep)
     db.session.commit()
     return jsonify({'message': 'Dependency removed'}), 200
+
+# Bulk update tasks
+@board_bp.route('/boards/<int:board_id>/tasks/bulk', methods=['POST'])
+@token_required
+def bulk_update_tasks(current_user, board_id) -> Tuple[Response, int]:
+    try:
+        board: Board | None = Board.query.filter_by(id=board_id).first()
+        if not board:
+            return jsonify({'message': 'Board not found'}), 404
+        if board.owner_id != current_user.id and not BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first():
+            return jsonify({'message': 'Board not found'}), 404
+        data = request.get_json() or {}
+        task_ids = data.get('task_ids', [])
+        changes = data.get('changes', {}) or {}
+        if not isinstance(task_ids, list) or not task_ids:
+            return jsonify({'message': 'task_ids required'}), 400
+        updates = {}
+        if 'status' in changes and changes['status']:
+            if not BoardStatus.query.filter_by(board_id=board.id, name=changes['status']).first():
+                max_pos: int = db.session.query(db.func.max(BoardStatus.position)).filter_by(board_id=board.id).scalar() or 0
+                db.session.add(BoardStatus(board_id=board.id, name=changes['status'], position=max_pos + 1))
+                db.session.flush()
+            updates['status'] = changes['status']
+        if 'assigned_to' in changes:
+            updates['assigned_to'] = changes['assigned_to']
+        if 'estimate' in changes:
+            try:
+                updates['estimate'] = int(changes['estimate']) if changes['estimate'] is not None else None
+            except (TypeError, ValueError):
+                pass
+        if 'labels' in changes:
+            updates['labels'] = (",".join(changes['labels']) if isinstance(changes['labels'], list) else changes['labels'])
+        if updates:
+            (BoardTask.query
+                .filter(BoardTask.board_id==board.id, BoardTask.id.in_(task_ids))
+                .update(updates, synchronize_session=False))
+            db.session.commit()
+            try:
+                db.session.add(ActivityLog(board_id=board.id, user_id=current_user.id, action='bulk_update', entity_type='task', entity_id=None, before=None, after=json.dumps({'task_ids': task_ids, 'changes': changes})))
+                db.session.commit()
+            except sqlalchemy.exc.SQLAlchemyError:
+                db.session.rollback()
+        return jsonify({'message': 'Updated'}), 200
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({'message': 'Internal server error'}), 500
+
+# Sprint persistence
+@board_bp.route('/boards/<int:board_id>/sprint', methods=['PUT'])
+@token_required
+def update_board_sprint(current_user, board_id) -> Tuple[Response, int]:
+    try:
+        board: Board | None = Board.query.filter_by(id=board_id).first()
+        if not board:
+            return jsonify({'message': 'Board not found'}), 404
+        if board.owner_id != current_user.id and not BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first():
+            return jsonify({'message': 'Board not found'}), 404
+        data = request.get_json() or {}
+        board.sprint_start = _parse_date(data.get('sprint_start'))
+        board.sprint_end = _parse_date(data.get('sprint_end'))
+        db.session.commit()
+        try:
+            db.session.add(ActivityLog(board_id=board.id, user_id=current_user.id, action='sprint_update', entity_type='board', entity_id=board.id, before=None, after=json.dumps({'sprint_start': data.get('sprint_start'), 'sprint_end': data.get('sprint_end')})))
+            db.session.commit()
+        except sqlalchemy.exc.SQLAlchemyError:
+            db.session.rollback()
+        return jsonify({'sprint_start': board.sprint_start.isoformat() if board.sprint_start else None, 'sprint_end': board.sprint_end.isoformat() if board.sprint_end else None}), 200
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({'message': 'Internal server error'}), 500
+
+@board_bp.route('/boards/<int:board_id>/sprint', methods=['GET'])
+@token_required
+def get_board_sprint(current_user, board_id) -> Tuple[Response, int]:
+    board: Board | None = Board.query.filter_by(id=board_id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    if board.owner_id != current_user.id and not BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first():
+        return jsonify({'message': 'Board not found'}), 404
+    return jsonify({'sprint_start': board.sprint_start.isoformat() if board.sprint_start else None, 'sprint_end': board.sprint_end.isoformat() if board.sprint_end else None}), 200
+
+# Reports
+@board_bp.route('/boards/<int:board_id>/reports/burnup', methods=['GET'])
+@token_required
+def burnup_data(current_user, board_id) -> Tuple[Response, int]:
+    board: Board | None = Board.query.filter_by(id=board_id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    tasks: list[BoardTask] = BoardTask.query.filter_by(board_id=board.id).all()
+    total = sum((t.estimate or 0) for t in tasks)
+    done = sum((min(t.estimate or 0, t.effort_used or 0) if t.status == 'done' else 0) for t in tasks)
+    return jsonify({'scope_total': total, 'completed_total': done, 'sprint_start': board.sprint_start.isoformat() if board.sprint_start else None, 'sprint_end': board.sprint_end.isoformat() if board.sprint_end else None}), 200
+
+@board_bp.route('/boards/<int:board_id>/reports/cfd', methods=['GET'])
+@token_required
+def cfd_data(current_user, board_id) -> Tuple[Response, int]:
+    board: Board | None = Board.query.filter_by(id=board_id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    statuses: list[BoardStatus] = BoardStatus.query.filter_by(board_id=board.id).order_by(BoardStatus.position).all()
+    counts = { s.name: BoardTask.query.filter_by(board_id=board.id, status=s.name).count() for s in statuses }
+    return jsonify({'counts': counts}), 200
+
+# Activity log listing
+@board_bp.route('/boards/<int:board_id>/activity', methods=['GET'])
+@token_required
+def list_activity(current_user, board_id) -> Tuple[Response, int]:
+    board: Board | None = Board.query.filter_by(id=board_id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    if board.owner_id != current_user.id and not BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first():
+        return jsonify({'message': 'Board not found'}), 404
+    action = request.args.get('action')
+    entity_type = request.args.get('entity_type')
+    q = ActivityLog.query.filter_by(board_id=board.id)
+    if action:
+        q = q.filter_by(action=action)
+    if entity_type:
+        q = q.filter_by(entity_type=entity_type)
+    q = q.order_by(ActivityLog.created_at.desc()).limit(200)
+    items = q.all()
+    return jsonify([
+        {
+            'id': a.id,
+            'board_id': a.board_id,
+            'user_id': a.user_id,
+            'action': a.action,
+            'entity_type': a.entity_type,
+            'entity_id': a.entity_id,
+            'before': a.before,
+            'after': a.after,
+            'created_at': a.created_at.isoformat() if a.created_at else None
+        }
+        for a in items
+    ]), 200
+
+# Multiple sprint management
+@board_bp.route('/boards/<int:board_id>/sprints', methods=['GET'])
+@token_required
+def list_sprints(current_user, board_id) -> Tuple[Response, int]:
+    board: Board | None = Board.query.filter_by(id=board_id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    if board.owner_id != current_user.id and not BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first():
+        return jsonify({'message': 'Board not found'}), 404
+    sprints: list[BoardSprint] = BoardSprint.query.filter_by(board_id=board.id).order_by(BoardSprint.start_date.desc()).all()
+    return jsonify([
+        {
+            'id': s.id,
+            'name': s.name,
+            'start_date': s.start_date.isoformat() if s.start_date else None,
+            'end_date': s.end_date.isoformat() if s.end_date else None,
+            'goal': s.goal,
+            'is_active': bool(s.is_active)
+        } for s in sprints
+    ]), 200
+
+@board_bp.route('/boards/<int:board_id>/sprints', methods=['POST'])
+@token_required
+def create_sprint(current_user, board_id) -> Tuple[Response, int]:
+    board: Board | None = Board.query.filter_by(id=board_id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    manager: BoardMember | None = BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first()
+    if not (board.owner_id == current_user.id or manager):
+        return jsonify({'message': 'Board not found'}), 404
+    data = request.get_json() or {}
+    sd = _parse_date(data.get('start_date'))
+    ed = _parse_date(data.get('end_date'))
+    if not sd or not ed or sd > ed:
+        return jsonify({'message': 'Invalid dates'}), 400
+    sprint = BoardSprint(board_id=board.id, start_date=sd, end_date=ed, name=data.get('name'), goal=data.get('goal'), is_active=int(bool(data.get('is_active', False))))
+    if sprint.is_active:
+        BoardSprint.query.filter_by(board_id=board.id, is_active=1).update({'is_active': 0})
+    db.session.add(sprint)
+    db.session.commit()
+    try:
+        db.session.add(ActivityLog(board_id=board.id, user_id=current_user.id, action='sprint_create', entity_type='sprint', entity_id=sprint.id, before=None, after=json.dumps({'start_date': sprint.start_date.isoformat(), 'end_date': sprint.end_date.isoformat()})))
+        db.session.commit()
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.session.rollback()
+    return jsonify({'id': sprint.id}), 201
+
+@board_bp.route('/boards/<int:board_id>/sprints/<int:sprint_id>', methods=['PUT'])
+@token_required
+def update_sprint(current_user, board_id, sprint_id) -> Tuple[Response, int]:
+    board: Board | None = Board.query.filter_by(id=board_id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    manager: BoardMember | None = BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first()
+    if not (board.owner_id == current_user.id or manager):
+        return jsonify({'message': 'Board not found'}), 404
+    s: BoardSprint | None = BoardSprint.query.filter_by(id=sprint_id, board_id=board.id).first()
+    if not s:
+        return jsonify({'message': 'Sprint not found'}), 404
+    data = request.get_json() or {}
+    before = {'name': s.name, 'start_date': s.start_date.isoformat(), 'end_date': s.end_date.isoformat(), 'goal': s.goal, 'is_active': bool(s.is_active)}
+    if 'name' in data:
+        s.name = data['name']
+    if 'goal' in data:
+        s.goal = data['goal']
+    if 'start_date' in data:
+        sd = _parse_date(data.get('start_date'))
+        if sd:
+            s.start_date = sd
+    if 'end_date' in data:
+        ed = _parse_date(data.get('end_date'))
+        if ed:
+            s.end_date = ed
+    if 'is_active' in data:
+        s.is_active = 1 if data['is_active'] else 0
+        if s.is_active:
+            BoardSprint.query.filter_by(board_id=board.id, is_active=1).update({'is_active': 0})
+            s.is_active = 1
+    db.session.commit()
+    try:
+        db.session.add(ActivityLog(board_id=board.id, user_id=current_user.id, action='sprint_update', entity_type='sprint', entity_id=s.id, before=json.dumps(before), after=json.dumps({'name': s.name, 'start_date': s.start_date.isoformat(), 'end_date': s.end_date.isoformat(), 'goal': s.goal, 'is_active': bool(s.is_active)})))
+        db.session.commit()
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.session.rollback()
+    return jsonify({'message': 'Sprint updated'}), 200
+
+@board_bp.route('/boards/<int:board_id>/sprints/<int:sprint_id>', methods=['DELETE'])
+@token_required
+def delete_sprint(current_user, board_id, sprint_id) -> Tuple[Response, int]:
+    board: Board | None = Board.query.filter_by(id=board_id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    manager: BoardMember | None = BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first()
+    if not (board.owner_id == current_user.id or manager):
+        return jsonify({'message': 'Board not found'}), 404
+    s: BoardSprint | None = BoardSprint.query.filter_by(id=sprint_id, board_id=board.id).first()
+    if not s:
+        return jsonify({'message': 'Sprint not found'}), 404
+    db.session.delete(s)
+    db.session.commit()
+    try:
+        db.session.add(ActivityLog(board_id=board.id, user_id=current_user.id, action='sprint_delete', entity_type='sprint', entity_id=sprint_id, before=None, after=None))
+        db.session.commit()
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.session.rollback()
+    return jsonify({'message': 'Sprint deleted'}), 200
+
+@board_bp.route('/boards/<int:board_id>/sprints/active', methods=['GET'])
+@token_required
+def get_active_sprint(current_user, board_id) -> Tuple[Response, int]:
+    board: Board | None = Board.query.filter_by(id=board_id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    if board.owner_id != current_user.id and not BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first():
+        return jsonify({'message': 'Board not found'}), 404
+    s: BoardSprint | None = BoardSprint.query.filter_by(board_id=board.id, is_active=1).order_by(BoardSprint.start_date.desc()).first()
+    if not s:
+        return jsonify({ 'sprint': None }), 200
+    return jsonify({
+        'sprint': {
+            'id': s.id,
+            'name': s.name,
+            'start_date': s.start_date.isoformat(),
+            'end_date': s.end_date.isoformat(),
+            'goal': s.goal,
+            'is_active': bool(s.is_active)
+        }
+    }), 200
 
 # Board templates: simple payload of statuses and priorities
 @board_bp.route('/boards/templates', methods=['GET'])

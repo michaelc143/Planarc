@@ -28,6 +28,8 @@ export default function BoardDetail(): React.JSX.Element {
 	const [members, setMembers] = useState<Array<{ id: number; board_id: number; user_id: number; username?: string; role: string; joined_at: string }>>([]);
 	const [newMemberUsername, setNewMemberUsername] = useState<string>("");
 	const [showCreateForm, setShowCreateForm] = useState<boolean>(false);
+	const [sprints, setSprints] = useState<Array<{ id: number; name?: string; start_date: string; end_date: string; is_active: boolean }>>([]);
+	const [createSprintId, setCreateSprintId] = useState<string>("");
 	const headerRef = useRef<HTMLDivElement | null>(null);
 	const [kanbanHeight, setKanbanHeight] = useState<number>(0);
 	// Dependencies UI state
@@ -84,6 +86,12 @@ export default function BoardDetail(): React.JSX.Element {
 					const d = await boardService.listDependencies(id);
 					setDeps(Array.isArray(d) ? d : []);
 				} catch { /* ignore */ }
+				try {
+					const sp = await boardService.listSprints(id);
+					setSprints(Array.isArray(sp) ? sp : []);
+					const active = Array.isArray(sp) ? sp.find(s => s.is_active) : undefined;
+					setCreateSprintId(active ? String(active.id) : "");
+				} catch { /* ignore */ }
 			} catch (e) {
 				const msg = e instanceof Error ? e.message : "Failed to load board";
 				showToast(msg, "error");
@@ -104,6 +112,7 @@ export default function BoardDetail(): React.JSX.Element {
 				assigned_to: undefined,
 				due_date: undefined,
 				estimate: estimate && /^\d+$/.test(estimate) ? Number(estimate) : undefined,
+				sprint_id: createSprintId ? Number(createSprintId) : undefined,
 			});
 			setTasks((prev) => [created, ...prev]);
 			setTitle("");
@@ -111,6 +120,7 @@ export default function BoardDetail(): React.JSX.Element {
 			setPriority("medium");
 			setEstimate("");
 			setCreateStatusName("");
+			setCreateSprintId("");
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : "Failed to create task";
 			showToast(msg, "error");
@@ -292,6 +302,17 @@ export default function BoardDetail(): React.JSX.Element {
 							<div>
 								<label className="block text-sm text-gray-700 mb-1">Status</label>
 								<StatusPicker boardId={id} value={createStatusName} onChange={setCreateStatusName} />
+							</div>
+							<div>
+								<label htmlFor="create-sprint" className="block text-sm text-gray-700 mb-1">Sprint</label>
+								<select id="create-sprint" className="w-full border px-3 py-2 rounded" value={createSprintId} onChange={e => setCreateSprintId(e.target.value)}>
+									<option value="">(none)</option>
+									{sprints.map(s => (
+										<option key={s.id} value={String(s.id)}>
+											{(s.name && s.name.trim()) ? s.name : `Sprint #${s.id}`} — {s.start_date} → {s.end_date}{s.is_active ? " (active)" : ""}
+										</option>
+									))}
+								</select>
 							</div>
 							<div className="sm:col-span-4">
 								<label className="block text-sm text-gray-700 mb-1">Description</label>

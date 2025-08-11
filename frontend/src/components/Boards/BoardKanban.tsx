@@ -13,6 +13,8 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 	const { showToast } = useContext(ToastContext);
 	const [statuses, setStatuses] = useState<BoardStatus[]>([]);
 	const [priorities, setPriorities] = useState<BoardPriority[]>([]);
+	const [sprints, setSprints] = useState<Array<{ id: number; name?: string; start_date: string; end_date: string; is_active: boolean }>>([]);
+	const [members, setMembers] = useState<Array<{ id: number; board_id: number; user_id: number; username?: string; role: string; joined_at: string }>>([]);
 	const [newStatusName, setNewStatusName] = useState("");
 	const [editingStatusId, setEditingStatusId] = useState<number | null>(null);
 	const [editingStatusName, setEditingStatusName] = useState("");
@@ -68,6 +70,30 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 			mounted = false;
 			window.removeEventListener("planarc:board-statuses-updated", onStatusesUpdated);
 		};
+	}, [boardId]);
+
+	// Load sprints for sprint selector in edit modal
+	useEffect(() => {
+		let mounted = true;
+		(async () => {
+			try {
+				const sp = await boardService.listSprints(boardId);
+				if (mounted) { setSprints(Array.isArray(sp) ? sp : []); }
+			} catch { /* ignore */ }
+		})();
+		return () => { mounted = false; };
+	}, [boardId]);
+
+	// Load members for assignee dropdowns (used by bulk edit)
+	useEffect(() => {
+		let mounted = true;
+		(async () => {
+			try {
+				const m = await boardService.listMembers(boardId);
+				if (mounted) {setMembers(Array.isArray(m) ? m : []);}
+			} catch { /* ignore */ }
+		})();
+		return () => { mounted = false; };
 	}, [boardId]);
 
 	useEffect(() => {
@@ -134,8 +160,54 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 	const [editOrigStatus, setEditOrigStatus] = useState<string>("todo");
 	const [editEstimate, setEditEstimate] = useState<string>("");
 	const [editEffortUsed, setEditEffortUsed] = useState<string>("0");
+	const [editSprintId, setEditSprintId] = useState<string>("");
 	const estimateInputRef = useRef<HTMLInputElement | null>(null);
 	const [focusEstimateNext, setFocusEstimateNext] = useState<number | null>(null);
+
+	// Bulk edit state
+	const [bulkMode, setBulkMode] = useState(false);
+	const [selected, setSelected] = useState<Set<number>>(new Set());
+	const [bulkStatus, setBulkStatus] = useState<string>("");
+	const [bulkAssignee, setBulkAssignee] = useState<string>("");
+	const [bulkEstimate, setBulkEstimate] = useState<string>("");
+	const [bulkLabels, setBulkLabels] = useState<string>("");
+
+	const toggleSelect = (id: number) => {
+		setSelected(prev => {
+			const next = new Set(prev);
+			if (next.has(id)) {next.delete(id);} else {next.add(id);}
+			return next;
+		});
+	};
+
+	const clearBulk = () => { setSelected(new Set()); setBulkStatus(""); setBulkAssignee(""); setBulkEstimate(""); setBulkLabels(""); };
+
+	const applyBulk = async () => {
+		if (selected.size === 0) { return; }
+		const changes: { status?: string; assigned_to?: number | null; estimate?: number | null; labels?: string[] | string | null } = {};
+		if (bulkStatus) {changes.status = bulkStatus;}
+		if (bulkAssignee !== "") {changes.assigned_to = bulkAssignee === "none" ? null : Number(bulkAssignee);}
+		if (bulkEstimate !== "") {changes.estimate = /^\d+$/.test(bulkEstimate) ? Number(bulkEstimate) : null;}
+		if (bulkLabels !== "") {changes.labels = bulkLabels;}
+		try {
+			await boardService.bulkUpdateTasks(boardId, Array.from(selected), changes);
+			// Update local state optimistically
+			setTasks(prev => prev.map(t => {
+				if (!selected.has(t.id)) {return t;}
+				return {
+					...t,
+					status: changes.status ?? t.status,
+					assigned_to: (changes.assigned_to !== undefined ? changes.assigned_to : t.assigned_to) as number | undefined,
+					estimate: (changes.estimate !== undefined ? changes.estimate ?? undefined : t.estimate),
+				};
+			}));
+			showToast(`Updated ${selected.size} task(s)`, "success");
+			clearBulk();
+			setBulkMode(false);
+		} catch (e) {
+			showToast(e instanceof Error ? e.message : "Bulk update failed", "error");
+		}
+	};
 
 	// --- UI color helpers for dynamic borders and readable contrast ---
 	const parseHex = (hex?: string): { r: number; g: number; b: number } | null => {
@@ -243,6 +315,16 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 		setEditOrigStatus(t.status);
 		setEditEstimate(typeof t.estimate === "number" ? String(t.estimate) : "");
 		setEditEffortUsed(typeof t.effort_used === "number" ? String(t.effort_used) : "0");
+		setEditSprintId(t.sprint_id != null ? String(t.sprint_id) : "");
+		// If sprints not yet loaded, fetch them to populate selector immediately
+		if (!sprints || sprints.length === 0) {
+			(void (async () => {
+				try {
+					const sp = await boardService.listSprints(boardId);
+					setSprints(Array.isArray(sp) ? sp : []);
+				} catch { /* ignore */ }
+			})());
+		}
 	};
 	const cancelEdit = () => setEditingId(null);
 
@@ -256,6 +338,7 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 				priority: editPriority,
 				estimate: trimmed === "" ? null : (/^\d+$/.test(trimmed) ? Number(trimmed) : undefined),
 				effort_used: /^\d+$/.test(editEffortUsed.trim()) ? Number(editEffortUsed.trim()) : 0,
+				sprint_id: editSprintId === "" ? null : Number(editSprintId),
 			});
 			if (editStatus !== editOrigStatus) {
 				const toPos = (columns[editStatus] ? columns[editStatus].length : 0);
@@ -263,7 +346,7 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 				setTasks(prev => prev.map(t => t.id === editingId ? { ...t, status: editStatus, position: toPos } : t));
 			}
 			setTasks(prev => prev.map(t => t.id === editingId ? { ...t, title: editTitle, description: editDesc, priority: editPriority } : t));
-			setTasks(prev => prev.map(t => t.id === editingId ? { ...t, title: editTitle, description: editDesc, priority: editPriority, estimate: (trimmed === "" ? undefined : (/^\d+$/.test(trimmed) ? Number(trimmed) : t.estimate)), effort_used: (/^\d+$/.test(editEffortUsed.trim()) ? Number(editEffortUsed.trim()) : 0) } : t));
+			setTasks(prev => prev.map(t => t.id === editingId ? { ...t, title: editTitle, description: editDesc, priority: editPriority, estimate: (trimmed === "" ? undefined : (/^\d+$/.test(trimmed) ? Number(trimmed) : t.estimate)), effort_used: (/^\d+$/.test(editEffortUsed.trim()) ? Number(editEffortUsed.trim()) : 0), sprint_id: (editSprintId === "" ? null : Number(editSprintId)) } : t));
 			setEditingId(null);
 		} catch (e) {
 			showToast(e instanceof Error ? e.message : "Failed to update task", "error");
@@ -342,11 +425,45 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 
 	return (
 		<div className="space-y-3 h-full flex flex-col min-h-0">
-			<div className="flex gap-2 items-center">
+			<div className="flex gap-2 items-center justify-between">
 				<input className="border px-2 py-1 rounded" placeholder="Add status (column)" value={newStatusName} onChange={e => setNewStatusName(e.target.value)} />
 				<input title="Column color" type="color" className="border rounded w-10 h-10 p-0" value={newStatusColor} onChange={e => setNewStatusColor(e.target.value)} />
 				<button className="px-3 py-1 border rounded" onClick={addStatus}>Add</button>
+				<div className="flex items-center gap-2">
+					<button className="px-3 py-1 border rounded" aria-pressed={bulkMode} onClick={() => { setBulkMode(v => !v); if (!bulkMode) {clearBulk();} }}>{bulkMode ? "Close bulk" : "Bulk edit"}</button>
+				</div>
 			</div>
+			{bulkMode && (
+				<div className="border rounded p-2 bg-white shadow-sm flex flex-wrap items-end gap-2">
+					<div>
+						<label className="block text-xs text-gray-700 mb-1">Status</label>
+						<select className="border px-2 py-1 rounded" value={bulkStatus} onChange={e => setBulkStatus(e.target.value)}>
+							<option value="">(no change)</option>
+							{statuses.map(st => <option key={st.id} value={st.name}>{st.name.replace("_", " ")}</option>)}
+						</select>
+					</div>
+					<div>
+						<label className="block text-xs text-gray-700 mb-1">Assignee</label>
+						<select className="border px-2 py-1 rounded" value={bulkAssignee} onChange={e => setBulkAssignee(e.target.value)}>
+							<option value="">(no change)</option>
+							<option value="none">Unassigned</option>
+							{members.map(m => <option key={m.id} value={String(m.user_id)}>@{m.username ?? m.user_id}</option>)}
+						</select>
+					</div>
+					<div>
+						<label className="block text-xs text-gray-700 mb-1">Estimate</label>
+						<input className="border px-2 py-1 rounded w-24" type="number" min={0} placeholder="e.g. 3" value={bulkEstimate} onChange={e => setBulkEstimate(e.target.value)} />
+					</div>
+					<div>
+						<label className="block text-xs text-gray-700 mb-1">Labels (CSV)</label>
+						<input className="border px-2 py-1 rounded w-48" placeholder="bug, ui" value={bulkLabels} onChange={e => setBulkLabels(e.target.value)} />
+					</div>
+					<div className="ml-auto flex items-center gap-2">
+						<div className="text-sm text-gray-600">Selected: {selected.size}</div>
+						<button className="px-3 py-1 border rounded" disabled={selected.size === 0} onClick={applyBulk}>Apply</button>
+					</div>
+				</div>
+			)}
 			<div className="overflow-x-auto min-h-0 flex-1">
 				<div className="flex flex-nowrap items-stretch gap-4 pb-2 min-h-0 h-full">
 					{statuses.map((s) => {
@@ -421,6 +538,15 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 																<label htmlFor={`effort-${t.id}`} className="block text-xs text-gray-700 mb-1">Effort used</label>
 																<input id={`effort-${t.id}`} className="border px-2 py-1 rounded w-full sm:w-24" type="number" min={0} value={editEffortUsed} onChange={e => setEditEffortUsed(e.target.value)} />
 															</div>
+															<div className="w-full sm:w-auto">
+																<label htmlFor={`sprint-${t.id}`} className="block text-xs text-gray-700 mb-1">Sprint</label>
+																<select id={`sprint-${t.id}`} className="border px-2 py-1 rounded w-full sm:w-48" value={editSprintId} onChange={e => setEditSprintId(e.target.value)}>
+																	<option value="">(none)</option>
+																	{sprints.map(s => (
+																		<option key={s.id} value={String(s.id)}>{(s.name && s.name.trim()) ? s.name : `Sprint #${s.id}`} — {s.start_date} → {s.end_date}{s.is_active ? " (active)" : ""}</option>
+																	))}
+																</select>
+															</div>
 														</div>
 														<div className="flex gap-2">
 															<button className="bg-blue-600 text-white px-2 py-1 rounded" onClick={saveEdit}>Save</button>
@@ -428,7 +554,15 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 														</div>
 													</div>
 												) : (
-													<div className="cursor-move">
+													<div className="cursor-move relative">
+														{bulkMode && (
+															<input
+																type="checkbox"
+																className="absolute top-1 right-1"
+																checked={selected.has(t.id)}
+																onChange={() => toggleSelect(t.id)}
+															/>
+														)}
 														<div className="font-medium flex items-center justify-between">
 															<span>{t.title} <span className="text-xs text-gray-500">[{t.priority}]</span></span>
 															<div className="text-xs space-x-2">

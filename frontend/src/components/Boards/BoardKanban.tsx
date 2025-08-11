@@ -321,15 +321,7 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 		setEditSprintId(t.sprint_id != null ? String(t.sprint_id) : "");
 		setEditAssignee(t.assigned_to != null ? String(t.assigned_to) : "");
 		setEditLabels(t.labels ?? "");
-		// If sprints not yet loaded, fetch them to populate selector immediately
-		if (!sprints || sprints.length === 0) {
-			(void (async () => {
-				try {
-					const sp = await boardService.listSprints(boardId);
-					setSprints(Array.isArray(sp) ? sp : []);
-				} catch { /* ignore */ }
-			})());
-		}
+		// Sprints are loaded on mount; avoid extra async updates here to keep tests stable
 	};
 	const cancelEdit = () => setEditingId(null);
 
@@ -600,6 +592,20 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 															</div>
 														</div>
 														<div className="text-sm text-gray-600">{t.description}</div>
+														{t.sprint_id != null && (
+															<div className="mt-1 text-xs">
+																{(() => {
+																	const sp = sprints.find(sp => sp.id === t.sprint_id);
+																	if (!sp) { return <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Sprint #{t.sprint_id}</span>; }
+																	const label = (sp.name && sp.name.trim()) ? sp.name : `Sprint #${sp.id}`;
+																	return (
+																		<span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+																			Sprint: {label}{sp.is_active ? " (active)" : ""}
+																		</span>
+																	);
+																})()}
+															</div>
+														)}
 														{(t.assigned_to != null || (t.labels && t.labels.trim() !== "")) && (
 															<div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
 																{t.assigned_to != null && (

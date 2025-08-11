@@ -30,6 +30,8 @@ export default function BoardDetail(): React.JSX.Element {
 	const [showCreateForm, setShowCreateForm] = useState<boolean>(false);
 	const [sprints, setSprints] = useState<Array<{ id: number; name?: string; start_date: string; end_date: string; is_active: boolean }>>([]);
 	const [createSprintId, setCreateSprintId] = useState<string>("");
+	const [createAssignee, setCreateAssignee] = useState<string>("");
+	const [createLabels, setCreateLabels] = useState<string>("");
 	const headerRef = useRef<HTMLDivElement | null>(null);
 	const [kanbanHeight, setKanbanHeight] = useState<number>(0);
 	// Dependencies UI state
@@ -109,10 +111,11 @@ export default function BoardDetail(): React.JSX.Element {
 				description,
 				status: createStatusName || "todo",
 				priority,
-				assigned_to: undefined,
+				assigned_to: createAssignee === "" ? undefined : (createAssignee === "none" ? null : Number(createAssignee)),
 				due_date: undefined,
 				estimate: estimate && /^\d+$/.test(estimate) ? Number(estimate) : undefined,
 				sprint_id: createSprintId ? Number(createSprintId) : undefined,
+				labels: createLabels.trim() === "" ? undefined : createLabels,
 			});
 			setTasks((prev) => [created, ...prev]);
 			setTitle("");
@@ -121,6 +124,8 @@ export default function BoardDetail(): React.JSX.Element {
 			setEstimate("");
 			setCreateStatusName("");
 			setCreateSprintId("");
+			setCreateAssignee("");
+			setCreateLabels("");
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : "Failed to create task";
 			showToast(msg, "error");
@@ -314,6 +319,14 @@ export default function BoardDetail(): React.JSX.Element {
 									))}
 								</select>
 							</div>
+							<div>
+								<label className="block text-sm text-gray-700 mb-1">Assignee</label>
+								<select className="w-full border px-3 py-2 rounded" value={createAssignee} onChange={e => setCreateAssignee(e.target.value)}>
+									<option value="">(none)</option>
+									<option value="none">Unassigned</option>
+									{members.map(m => <option key={m.id} value={String(m.user_id)}>@{m.username ?? m.user_id}</option>)}
+								</select>
+							</div>
 							<div className="sm:col-span-4">
 								<label className="block text-sm text-gray-700 mb-1">Description</label>
 								<textarea
@@ -332,6 +345,15 @@ export default function BoardDetail(): React.JSX.Element {
 									placeholder="e.g. 3"
 									value={estimate}
 									onChange={(e) => setEstimate(e.target.value)}
+								/>
+							</div>
+							<div className="sm:col-span-2">
+								<label className="block text-sm text-gray-700 mb-1">Labels (CSV)</label>
+								<input
+									className="w-full border px-3 py-2 rounded"
+									placeholder="bug, ui"
+									value={createLabels}
+									onChange={(e) => setCreateLabels(e.target.value)}
 								/>
 							</div>
 							<div className="sm:col-span-4 flex justify-end">

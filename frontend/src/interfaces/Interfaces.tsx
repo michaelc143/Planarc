@@ -83,7 +83,8 @@ export type BoardTask = {
   priority: string;
   board_id: number;
   sprint_id?: number | null;
-  assigned_to?: number;
+  assigned_to?: number | null;
+  labels?: string; // CSV string returned by backend (e.g., "bug, ui")
   created_by: number;
   due_date?: string;
   estimate?: number;

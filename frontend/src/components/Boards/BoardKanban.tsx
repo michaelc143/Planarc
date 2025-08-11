@@ -161,6 +161,8 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 	const [editEstimate, setEditEstimate] = useState<string>("");
 	const [editEffortUsed, setEditEffortUsed] = useState<string>("0");
 	const [editSprintId, setEditSprintId] = useState<string>("");
+	const [editAssignee, setEditAssignee] = useState<string>("");
+	const [editLabels, setEditLabels] = useState<string>("");
 	const estimateInputRef = useRef<HTMLInputElement | null>(null);
 	const [focusEstimateNext, setFocusEstimateNext] = useState<number | null>(null);
 
@@ -199,6 +201,7 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 					status: changes.status ?? t.status,
 					assigned_to: (changes.assigned_to !== undefined ? changes.assigned_to : t.assigned_to) as number | undefined,
 					estimate: (changes.estimate !== undefined ? changes.estimate ?? undefined : t.estimate),
+					labels: (changes.labels !== undefined ? (changes.labels === null ? undefined : (Array.isArray(changes.labels) ? changes.labels.join(", ") : String(changes.labels))) : t.labels),
 				};
 			}));
 			showToast(`Updated ${selected.size} task(s)`, "success");
@@ -316,6 +319,8 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 		setEditEstimate(typeof t.estimate === "number" ? String(t.estimate) : "");
 		setEditEffortUsed(typeof t.effort_used === "number" ? String(t.effort_used) : "0");
 		setEditSprintId(t.sprint_id != null ? String(t.sprint_id) : "");
+		setEditAssignee(t.assigned_to != null ? String(t.assigned_to) : "");
+		setEditLabels(t.labels ?? "");
 		// If sprints not yet loaded, fetch them to populate selector immediately
 		if (!sprints || sprints.length === 0) {
 			(void (async () => {
@@ -339,6 +344,8 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 				estimate: trimmed === "" ? null : (/^\d+$/.test(trimmed) ? Number(trimmed) : undefined),
 				effort_used: /^\d+$/.test(editEffortUsed.trim()) ? Number(editEffortUsed.trim()) : 0,
 				sprint_id: editSprintId === "" ? null : Number(editSprintId),
+				assigned_to: editAssignee === "" ? undefined : (editAssignee === "none" ? null : Number(editAssignee)),
+				labels: editLabels.trim() === "" ? null : editLabels,
 			});
 			if (editStatus !== editOrigStatus) {
 				const toPos = (columns[editStatus] ? columns[editStatus].length : 0);
@@ -346,7 +353,17 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 				setTasks(prev => prev.map(t => t.id === editingId ? { ...t, status: editStatus, position: toPos } : t));
 			}
 			setTasks(prev => prev.map(t => t.id === editingId ? { ...t, title: editTitle, description: editDesc, priority: editPriority } : t));
-			setTasks(prev => prev.map(t => t.id === editingId ? { ...t, title: editTitle, description: editDesc, priority: editPriority, estimate: (trimmed === "" ? undefined : (/^\d+$/.test(trimmed) ? Number(trimmed) : t.estimate)), effort_used: (/^\d+$/.test(editEffortUsed.trim()) ? Number(editEffortUsed.trim()) : 0), sprint_id: (editSprintId === "" ? null : Number(editSprintId)) } : t));
+			setTasks(prev => prev.map(t => t.id === editingId ? {
+				...t,
+				title: editTitle,
+				description: editDesc,
+				priority: editPriority,
+				estimate: (trimmed === "" ? undefined : (/^\d+$/.test(trimmed) ? Number(trimmed) : t.estimate)),
+				effort_used: (/^\d+$/.test(editEffortUsed.trim()) ? Number(editEffortUsed.trim()) : 0),
+				sprint_id: (editSprintId === "" ? null : Number(editSprintId)),
+				assigned_to: (editAssignee === "" ? t.assigned_to : (editAssignee === "none" ? null : Number(editAssignee))) as number | null | undefined,
+				labels: editLabels.trim() === "" ? undefined : editLabels,
+			} : t));
 			setEditingId(null);
 		} catch (e) {
 			showToast(e instanceof Error ? e.message : "Failed to update task", "error");
@@ -547,6 +564,18 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 																	))}
 																</select>
 															</div>
+															<div className="w-full sm:w-auto">
+																<label htmlFor={`assignee-${t.id}`} className="block text-xs text-gray-700 mb-1">Assignee</label>
+																<select id={`assignee-${t.id}`} className="border px-2 py-1 rounded w-full sm:w-48" value={editAssignee} onChange={e => setEditAssignee(e.target.value)}>
+																	<option value="">(no change)</option>
+																	<option value="none">Unassigned</option>
+																	{members.map(m => <option key={m.id} value={String(m.user_id)}>@{m.username ?? m.user_id}</option>)}
+																</select>
+															</div>
+															<div className="w-full sm:w-auto">
+																<label htmlFor={`labels-${t.id}`} className="block text-xs text-gray-700 mb-1">Labels (CSV)</label>
+																<input id={`labels-${t.id}`} className="border px-2 py-1 rounded w-full sm:w-48" placeholder="bug, ui" value={editLabels} onChange={e => setEditLabels(e.target.value)} />
+															</div>
 														</div>
 														<div className="flex gap-2">
 															<button className="bg-blue-600 text-white px-2 py-1 rounded" onClick={saveEdit}>Save</button>
@@ -571,6 +600,25 @@ export default function BoardKanban({ boardId, tasks, setTasks }: Props): React.
 															</div>
 														</div>
 														<div className="text-sm text-gray-600">{t.description}</div>
+														{(t.assigned_to != null || (t.labels && t.labels.trim() !== "")) && (
+															<div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+																{t.assigned_to != null && (
+																	<span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">Assignee: {(() => {
+																		const m = members.find(mm => mm.user_id === t.assigned_to);
+																		return m ? `@${m.username ?? m.user_id}` : `User #${t.assigned_to}`;
+																	})()}</span>
+																)}
+																{(t.labels && t.labels.trim() !== "") && (
+																	<div className="inline-flex items-center gap-1 flex-wrap">
+																		{t.labels.split(",").map((raw, i) => {
+																			const lab = raw.trim();
+																			if (!lab) { return null; }
+																			return <span key={i} className="px-1.5 py-0.5 rounded bg-gray-100 border text-gray-700">{lab}</span>;
+																		})}
+																	</div>
+																)}
+															</div>
+														)}
 														{(typeof t.effort_used === "number" || typeof t.estimate === "number") && (
 															<div className="text-xs text-gray-500 mt-1">
 																{typeof t.effort_used === "number"

@@ -283,6 +283,7 @@ def list_board_tasks(current_user, board_id) -> Tuple[Response, int]:
                 'priority': task.priority,
                 'board_id': task.board_id,
                 'assigned_to': task.assigned_to,
+                'labels': getattr(task, 'labels', None),
                 'sprint_id': getattr(task, 'sprint_id', None),
                 'created_by': task.created_by,
                 'due_date': task.due_date.isoformat() if task.due_date else None,
@@ -344,6 +345,7 @@ def create_board_task(current_user, board_id) -> Tuple[Response, int]:
             position=next_pos,
             estimate=(int(data['estimate']) if 'estimate' in data and isinstance(data['estimate'], (int, str)) and str(data['estimate']).isdigit() else None),
             effort_used=(int(data['effort_used']) if 'effort_used' in data and isinstance(data['effort_used'], (int, str)) and str(data['effort_used']).isdigit() else 0),
+            labels=(",".join(data['labels']) if isinstance(data.get('labels'), list) else data.get('labels')),
             sprint_id=(int(data['sprint_id']) if 'sprint_id' in data and isinstance(data['sprint_id'], (int, str)) and str(data['sprint_id']).isdigit() else None)
         )
         db.session.add(task)
@@ -361,6 +363,7 @@ def create_board_task(current_user, board_id) -> Tuple[Response, int]:
             'priority': task.priority,
             'board_id': task.board_id,
             'assigned_to': task.assigned_to,
+            'labels': getattr(task, 'labels', None),
             'sprint_id': getattr(task, 'sprint_id', None),
             'created_by': task.created_by,
             'due_date': task.due_date.isoformat() if task.due_date else None,
@@ -396,10 +399,11 @@ def update_board_task(current_user, board_id, task_id) -> Tuple[Response, int]:
             'status': task.status,
             'priority': task.priority,
             'assigned_to': task.assigned_to,
+            'labels': getattr(task, 'labels', None),
             'estimate': task.estimate,
             'effort_used': task.effort_used
         }
-        for field in ['title', 'description', 'status', 'priority', 'assigned_to', 'estimate', 'effort_used']:
+        for field in ['title', 'description', 'status', 'priority', 'assigned_to', 'labels', 'estimate', 'effort_used']:
             if field in data:
                 # if changing to a new status ensure it exists
                 if field == 'status':
@@ -423,6 +427,9 @@ def update_board_task(current_user, board_id, task_id) -> Tuple[Response, int]:
                     val2 = data[field]
                     # Treat missing/invalid as 0
                     task.effort_used = int(val2) if isinstance(val2, (int, str)) and str(val2).isdigit() else 0
+                elif field == 'labels':
+                    val3 = data[field]
+                    task.labels = ",".join(val3) if isinstance(val3, list) else val3
                 else:
                     setattr(task, field, data[field])
         if 'sprint_id' in data:

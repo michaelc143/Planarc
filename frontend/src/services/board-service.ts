@@ -20,7 +20,7 @@ class BoardService {
 		return res.json();
 	}
 
-	async createBoard(payload: Pick<Board, "name" | "description"> & { invite_usernames?: string[]; invite_user_ids?: number[]; background_color?: string }): Promise<Board> {
+	async createBoard(payload: Pick<Board, "name" | "description"> & { invite_usernames?: string[]; invite_user_ids?: number[]; background_color?: string; statuses?: string[]; priorities?: string[] }): Promise<Board> {
 		const res = await fetch(`${API_BASE_URL}/boards`, {
 			method: "POST",
 			headers: this.authHeaders(),
@@ -156,6 +156,43 @@ class BoardService {
 		if (!res.ok) {
 			throw new Error((await res.json()).message || "Failed to reorder tasks");
 		}
+	}
+
+	// Dependencies
+	async listDependencies(boardId: number): Promise<Array<{ id: number; board_id: number; blocker_task_id: number; blocked_task_id: number; created_at?: string }>> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/dependencies`, { headers: this.authHeaders() });
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to fetch dependencies");
+		}
+		return res.json();
+	}
+
+	async createDependency(boardId: number, blocker_task_id: number, blocked_task_id: number): Promise<{ id: number }> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/dependencies`, {
+			method: "POST",
+			headers: this.authHeaders(),
+			body: JSON.stringify({ blocker_task_id, blocked_task_id }),
+		});
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to create dependency");
+		}
+		return res.json();
+	}
+
+	async deleteDependency(boardId: number, depId: number): Promise<void> {
+		const res = await fetch(`${API_BASE_URL}/boards/${boardId}/dependencies/${depId}`, { method: "DELETE", headers: this.authHeaders() });
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to delete dependency");
+		}
+	}
+
+	// Templates
+	async listBoardTemplates(): Promise<Array<{ id: string; name: string; statuses: string[]; priorities: string[] }>> {
+		const res = await fetch(`${API_BASE_URL}/boards/templates`, { headers: this.authHeaders() });
+		if (!res.ok) {
+			throw new Error((await res.json()).message || "Failed to load templates");
+		}
+		return res.json();
 	}
 
 	// Statuses

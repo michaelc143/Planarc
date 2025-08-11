@@ -44,8 +44,8 @@ CREATE TABLE IF NOT EXISTS board_tasks (
     INDEX idx_board_column (board_id, status, position)
 );
 
--- Optional index for ordering queries by status/position
-CREATE INDEX IF NOT EXISTS idx_board_tasks_board_status_position ON board_tasks (board_id, status, position);
+-- Optional index for ordering queries by status/position (script runs once on fresh DB)
+CREATE INDEX idx_board_tasks_board_status_position ON board_tasks (board_id, status, position);
 
 -- Board statuses table (custom per board)
 CREATE TABLE IF NOT EXISTS board_statuses (
@@ -89,3 +89,23 @@ CREATE TABLE IF NOT EXISTS user_defaults (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_user_defaults_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+-- Task dependencies table
+CREATE TABLE IF NOT EXISTS task_dependencies (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    board_id INT NOT NULL,
+    blocker_task_id INT NOT NULL,
+    blocked_task_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_task_dependency_edge (board_id, blocker_task_id, blocked_task_id),
+    CONSTRAINT ck_no_self_dependency CHECK (blocker_task_id != blocked_task_id),
+    CONSTRAINT fk_dep_board FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE,
+    CONSTRAINT fk_dep_blocker FOREIGN KEY (blocker_task_id) REFERENCES board_tasks(id) ON DELETE CASCADE,
+    CONSTRAINT fk_dep_blocked FOREIGN KEY (blocked_task_id) REFERENCES board_tasks(id) ON DELETE CASCADE
+);
+
+-- Optional helpful indexes for dependency lookups
+-- Indexes (omit IF NOT EXISTS for MySQL compatibility; init script runs only once)
+CREATE INDEX idx_task_deps_board ON task_dependencies (board_id);
+CREATE INDEX idx_task_deps_blocker ON task_dependencies (blocker_task_id);
+CREATE INDEX idx_task_deps_blocked ON task_dependencies (blocked_task_id);

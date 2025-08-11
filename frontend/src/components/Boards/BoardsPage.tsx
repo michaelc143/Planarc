@@ -14,6 +14,8 @@ export default function BoardsPage(): React.JSX.Element {
 	const [newBoardDesc, setNewBoardDesc] = useState<string>("");
 	const [inviteUsernames, setInviteUsernames] = useState<string>("");
 	const [newBoardBg, setNewBoardBg] = useState<string>("#ffffff");
+	const [templates, setTemplates] = useState<Array<{ id: string; name: string; statuses: string[]; priorities: string[] }>>([]);
+	const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
 
 	useEffect(() => {
 		(async () => {
@@ -29,15 +31,35 @@ export default function BoardsPage(): React.JSX.Element {
 		})();
 	}, []);
 
+	useEffect(() => {
+		(async () => {
+			try {
+				const t = await boardService.listBoardTemplates();
+				setTemplates(Array.isArray(t) ? t : []);
+			} catch {
+				setTemplates([]);
+			}
+		})();
+	}, []);
+
 	const onCreateBoard = async (e: React.FormEvent) => {
 		e.preventDefault();
 		try {
-			const created = await boardService.createBoard({ name: newBoardName, description: newBoardDesc, invite_usernames: inviteUsernames.split(",").map((s) => s.trim()).filter(Boolean), background_color: newBoardBg || undefined });
+			const chosen = templates.find(t => t.id === selectedTemplateId);
+			const created = await boardService.createBoard({
+				name: newBoardName,
+				description: newBoardDesc,
+				invite_usernames: inviteUsernames.split(",").map((s) => s.trim()).filter(Boolean),
+				background_color: newBoardBg || undefined,
+				statuses: chosen?.statuses,
+				priorities: chosen?.priorities,
+			});
 			setBoards((prev) => [created, ...prev]);
 			setNewBoardName("");
 			setNewBoardDesc("");
 			setInviteUsernames("");
 			setNewBoardBg("#ffffff");
+			setSelectedTemplateId("");
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : "Failed to create board";
 			showToast(msg, "error");
@@ -91,6 +113,15 @@ export default function BoardsPage(): React.JSX.Element {
 					<label className="text-sm text-gray-700">Board background</label>
 					<input type="color" className="border rounded w-12 h-10 p-0" value={newBoardBg} onChange={(e) => setNewBoardBg(e.target.value)} />
 					<input className="border px-2 py-1 rounded flex-1" placeholder="#ffffff or css color" value={newBoardBg} onChange={(e) => setNewBoardBg(e.target.value)} />
+				</div>
+				<div className="flex items-center gap-2">
+					<label className="text-sm text-gray-700">Template</label>
+					<select className="border px-2 py-1 rounded flex-1" value={selectedTemplateId} onChange={(e) => setSelectedTemplateId(e.target.value)}>
+						<option value="">None</option>
+						{templates.map(t => (
+							<option key={t.id} value={t.id}>{t.name}</option>
+						))}
+					</select>
 				</div>
 				<button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Create Board</button>
 			</form>

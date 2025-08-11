@@ -113,3 +113,12 @@ export type BoardMember = {
   role: string;
   joined_at: string;
 }
+
+// Dependencies between tasks
+export type TaskDependency = {
+  id: number;
+  board_id: number;
+  blocker_task_id: number;
+  blocked_task_id: number;
+  created_at?: string;
+}

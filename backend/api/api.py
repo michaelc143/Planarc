@@ -141,6 +141,25 @@ with app.app_context():
             db.session.commit()
         except sqlalchemy.exc.SQLAlchemyError:
             db.session.rollback()
+        # ensure task_dependencies table exists
+        try:
+            db.session.execute(text("""
+                CREATE TABLE IF NOT EXISTS task_dependencies (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    board_id INT NOT NULL,
+                    blocker_task_id INT NOT NULL,
+                    blocked_task_id INT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_task_dependency_edge (board_id, blocker_task_id, blocked_task_id),
+                    CONSTRAINT ck_no_self_dependency CHECK (blocker_task_id != blocked_task_id),
+                    CONSTRAINT fk_dep_board FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE,
+                    CONSTRAINT fk_dep_blocker FOREIGN KEY (blocker_task_id) REFERENCES board_tasks(id) ON DELETE CASCADE,
+                    CONSTRAINT fk_dep_blocked FOREIGN KEY (blocked_task_id) REFERENCES board_tasks(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """))
+            db.session.commit()
+        except sqlalchemy.exc.SQLAlchemyError:
+            db.session.rollback()
 
 # Register blueprints first
 app.register_blueprint(auth_bp, url_prefix='/api/auth')

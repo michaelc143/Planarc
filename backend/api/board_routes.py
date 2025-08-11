@@ -5,7 +5,7 @@ from typing import Tuple
 import sqlalchemy.exc
 from auth_middleware import token_required
 from flask import Blueprint, jsonify, request, Response
-from models import Board, BoardPriority, BoardStatus, BoardTask, UserDefaults, BoardMember, User, db
+from models import Board, BoardPriority, BoardStatus, BoardTask, UserDefaults, BoardMember, User, TaskDependency, db
 from sqlalchemy import select, or_
 
 board_bp = Blueprint('boards', __name__)
@@ -487,6 +487,95 @@ def reorder_tasks(current_user, board_id) -> Tuple[Response, int]:
     except sqlalchemy.exc.SQLAlchemyError:
         db.session.rollback()
         return jsonify({'message': 'Internal server error'}), 500
+
+# Task dependencies
+@board_bp.route('/boards/<int:board_id>/dependencies', methods=['GET'])
+@token_required
+def list_dependencies(current_user, board_id) -> Tuple[Response, int]:
+    board: Board | None = Board.query.filter_by(id=board_id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    if board.owner_id != current_user.id and not BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first():
+        return jsonify({'message': 'Board not found'}), 404
+    deps: list[TaskDependency] = TaskDependency.query.filter_by(board_id=board.id).all()
+    return jsonify([
+        {
+            'id': d.id,
+            'board_id': d.board_id,
+            'blocker_task_id': d.blocker_task_id,
+            'blocked_task_id': d.blocked_task_id,
+            'created_at': d.created_at.isoformat() if d.created_at else None
+        } for d in deps
+    ]), 200
+
+@board_bp.route('/boards/<int:board_id>/dependencies', methods=['POST'])
+@token_required
+def create_dependency(current_user, board_id) -> Tuple[Response, int]:
+    board: Board | None = Board.query.filter_by(id=board_id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    manager: BoardMember | None = BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first()
+    if not (board.owner_id == current_user.id or manager):
+        return jsonify({'message': 'Board not found'}), 404
+    data_obj = request.get_json() or {}
+    blocker_raw = data_obj.get('blocker_task_id')
+    blocked_raw = data_obj.get('blocked_task_id')
+    try:
+        blocker_id = int(blocker_raw)  # type: ignore[arg-type]
+        blocked_id = int(blocked_raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return jsonify({'message': 'Invalid task IDs'}), 400
+    if blocker_id == blocked_id:
+        return jsonify({'message': 'A task cannot depend on itself'}), 400
+    # ensure tasks exist and belong to board
+    if not BoardTask.query.filter_by(id=blocker_id, board_id=board.id).first() or not BoardTask.query.filter_by(id=blocked_id, board_id=board.id).first():
+        return jsonify({'message': 'Task not found'}), 404
+    # prevent duplicate
+    if TaskDependency.query.filter_by(board_id=board.id, blocker_task_id=blocker_id, blocked_task_id=blocked_id).first():
+        return jsonify({'message': 'Dependency already exists'}), 400
+    # Detect trivial cycle (blocked -> blocker already exists). Full cycle detection can be added later.
+    if TaskDependency.query.filter_by(board_id=board.id, blocker_task_id=blocked_id, blocked_task_id=blocker_id).first():
+        return jsonify({'message': 'Circular dependency not allowed'}), 400
+    dep = TaskDependency(board_id=board.id, blocker_task_id=blocker_id, blocked_task_id=blocked_id)
+    db.session.add(dep)
+    db.session.commit()
+    return jsonify({'id': dep.id, 'board_id': dep.board_id, 'blocker_task_id': dep.blocker_task_id, 'blocked_task_id': dep.blocked_task_id}), 201
+
+@board_bp.route('/boards/<int:board_id>/dependencies/<int:dep_id>', methods=['DELETE'])
+@token_required
+def delete_dependency(current_user, board_id, dep_id) -> Tuple[Response, int]:
+    board: Board | None = Board.query.filter_by(id=board_id).first()
+    if not board:
+        return jsonify({'message': 'Board not found'}), 404
+    manager: BoardMember | None = BoardMember.query.filter_by(board_id=board.id, user_id=current_user.id).first()
+    if not (board.owner_id == current_user.id or manager):
+        return jsonify({'message': 'Board not found'}), 404
+    dep: TaskDependency | None = TaskDependency.query.filter_by(id=dep_id, board_id=board.id).first()
+    if not dep:
+        return jsonify({'message': 'Dependency not found'}), 404
+    db.session.delete(dep)
+    db.session.commit()
+    return jsonify({'message': 'Dependency removed'}), 200
+
+# Board templates: simple payload of statuses and priorities
+@board_bp.route('/boards/templates', methods=['GET'])
+@token_required
+def list_board_templates(current_user) -> Tuple[Response, int]:
+    templates = [
+        {
+            'id': 'kanban-basic',
+            'name': 'Kanban (Basic)',
+            'statuses': ['todo', 'in_progress', 'review', 'done'],
+            'priorities': ['low', 'medium', 'high']
+        },
+        {
+            'id': 'scrum-sprint',
+            'name': 'Scrum Sprint',
+            'statuses': ['backlog', 'selected', 'in_progress', 'review', 'done'],
+            'priorities': ['low', 'medium', 'high', 'critical']
+        }
+    ]
+    return jsonify(templates), 200
 
 # Status management endpoints
 @board_bp.route('/boards/<int:board_id>/statuses', methods=['GET'])

@@ -216,3 +216,30 @@ class BoardMember(db.Model):
         self.board_id = board_id
         self.user_id = user_id
         self.role = role
+
+# Task dependency edges (blocker -> blocked)
+class TaskDependency(db.Model):
+    """ Directed dependency between tasks on the same board.
+        blocker_task_id blocks blocked_task_id.
+    """
+    __tablename__ = 'task_dependencies'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    board_id: Mapped[int] = mapped_column(ForeignKey('boards.id', ondelete='CASCADE'), nullable=False)
+    blocker_task_id: Mapped[int] = mapped_column(ForeignKey('board_tasks.id', ondelete='CASCADE'), nullable=False)
+    blocked_task_id: Mapped[int] = mapped_column(ForeignKey('board_tasks.id', ondelete='CASCADE'), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=db.func.current_timestamp())
+
+    __table_args__ = (
+        db.UniqueConstraint('board_id', 'blocker_task_id', 'blocked_task_id', name='uq_task_dependency_edge'),
+        db.CheckConstraint('blocker_task_id != blocked_task_id', name='ck_no_self_dependency'),
+    )
+
+    board: Mapped['Board'] = relationship('Board', backref=db.backref('dependencies', lazy=True, cascade="all, delete-orphan"))
+    blocker: Mapped['BoardTask'] = relationship('BoardTask', foreign_keys=[blocker_task_id])
+    blocked: Mapped['BoardTask'] = relationship('BoardTask', foreign_keys=[blocked_task_id])
+
+    def __init__(self, board_id: int, blocker_task_id: int, blocked_task_id: int):
+        self.board_id = board_id
+        self.blocker_task_id = blocker_task_id
+        self.blocked_task_id = blocked_task_id

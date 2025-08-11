@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useContext, useRef } from "react";
 import { useParams, Navigate, Link } from "react-router-dom";
-import { BoardTask, Board } from "../../interfaces/Interfaces";
+import { BoardTask, Board, TaskDependency } from "../../interfaces/Interfaces";
 import boardService from "../../services/board-service";
 import { AuthContext } from "../../contexts/AuthContext";
 import BoardKanban from "./BoardKanban";
+import DependenciesGraph from "./DependenciesGraph";
 import { StatusPicker, PriorityPicker } from "./StatusPriorityPickers";
 import { ToastContext } from "../../contexts/ToastContext";
 
@@ -29,6 +30,11 @@ export default function BoardDetail(): React.JSX.Element {
 	const [showCreateForm, setShowCreateForm] = useState<boolean>(false);
 	const headerRef = useRef<HTMLDivElement | null>(null);
 	const [kanbanHeight, setKanbanHeight] = useState<number>(0);
+	// Dependencies UI state
+	const [deps, setDeps] = useState<TaskDependency[]>([]);
+	const [depBlockerId, setDepBlockerId] = useState<string>("");
+	const [depBlockedId, setDepBlockedId] = useState<string>("");
+	const [showGraph, setShowGraph] = useState<boolean>(false);
 
 	// Recompute available viewport height for Kanban when header changes or viewport resizes
 	useEffect(() => {
@@ -74,6 +80,10 @@ export default function BoardDetail(): React.JSX.Element {
 					const m = await boardService.listMembers(id);
 					setMembers(m);
 				} catch { /* ignore if forbidden/not found */ }
+				try {
+					const d = await boardService.listDependencies(id);
+					setDeps(Array.isArray(d) ? d : []);
+				} catch { /* ignore */ }
 			} catch (e) {
 				const msg = e instanceof Error ? e.message : "Failed to load board";
 				showToast(msg, "error");
@@ -152,6 +162,30 @@ export default function BoardDetail(): React.JSX.Element {
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : "Failed to delete board";
 			showToast(msg, "error");
+		}
+	};
+
+	// Dependencies handlers
+	const addDependency = async () => {
+		const blocker = Number(depBlockerId);
+		const blocked = Number(depBlockedId);
+		if (!blocker || !blocked) { return; }
+		try {
+			const created = await boardService.createDependency(id, blocker, blocked);
+			setDeps(prev => [...prev, { id: created.id, board_id: id, blocker_task_id: blocker, blocked_task_id: blocked }]);
+			setDepBlockerId("");
+			setDepBlockedId("");
+		} catch (e) {
+			showToast(e instanceof Error ? e.message : "Failed to add dependency", "error");
+		}
+	};
+
+	const removeDependency = async (depId: number) => {
+		try {
+			await boardService.deleteDependency(id, depId);
+			setDeps(prev => prev.filter(d => d.id !== depId));
+		} catch (e) {
+			showToast(e instanceof Error ? e.message : "Failed to remove dependency", "error");
 		}
 	};
 
@@ -288,6 +322,45 @@ export default function BoardDetail(): React.JSX.Element {
 
 				<div className="min-h-0" style={{ height: kanbanHeight ? `${kanbanHeight}px` : undefined }}>
 					<BoardKanban boardId={id} tasks={tasks} setTasks={setTasks} />
+				</div>
+				<div className="mt-4 flex items-center justify-between">
+					<h3 className="font-semibold">Dependencies</h3>
+					<button type="button" className="px-3 py-1 border rounded" aria-pressed={showGraph} onClick={() => setShowGraph(v => !v)}>
+						{showGraph ? "Hide Graph" : "Show Graph"}
+					</button>
+				</div>
+				{showGraph && (
+					<div className="mt-2">
+						<DependenciesGraph tasks={tasks} dependencies={deps} />
+					</div>
+				)}
+				<div className="mt-6 border-t pt-4">
+					<h3 className="font-semibold mb-2">Manage Dependencies</h3>
+					<div className="flex flex-wrap gap-2 items-end">
+						<div>
+							<label className="block text-sm text-gray-700 mb-1">Blocker task</label>
+							<select className="border px-2 py-1 rounded min-w-[10rem]" value={depBlockerId} onChange={e => setDepBlockerId(e.target.value)}>
+								<option value="">Select…</option>
+								{tasks.map(t => <option key={t.id} value={t.id}>{t.title} (#{t.id})</option>)}
+							</select>
+						</div>
+						<div>
+							<label className="block text-sm text-gray-700 mb-1">Blocked task</label>
+							<select className="border px-2 py-1 rounded min-w-[10rem]" value={depBlockedId} onChange={e => setDepBlockedId(e.target.value)}>
+								<option value="">Select…</option>
+								{tasks.map(t => <option key={t.id} value={t.id}>{t.title} (#{t.id})</option>)}
+							</select>
+						</div>
+						<button type="button" className="px-3 py-1 border rounded" onClick={addDependency}>Add</button>
+					</div>
+					<ul className="mt-3 space-y-1">
+						{deps.map(d => (
+							<li key={d.id} className="flex items-center justify-between">
+								<span>Task #{d.blocker_task_id} blocks Task #{d.blocked_task_id}</span>
+								<button className="text-red-600 text-sm" onClick={() => removeDependency(d.id)}>Remove</button>
+							</li>
+						))}
+					</ul>
 				</div>
 			</div>
 		</div>

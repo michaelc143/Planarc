@@ -21,6 +21,7 @@ export default function BoardBurndown(): React.JSX.Element {
 	const [sprints, setSprints] = useState<Array<{ id: number; name?: string; start_date: string; end_date: string; is_active: boolean }>>([]);
 	const [selectedSprintId, setSelectedSprintId] = useState<number | null>(null);
 	const [savingSprint, setSavingSprint] = useState(false);
+	const [settingActive, setSettingActive] = useState(false);
 
 	// Prefer server active sprint; otherwise derive a 2-week current sprint starting this week's Monday; allow override via sprint editor
 	const sprint = useMemo(() => {
@@ -234,6 +235,32 @@ export default function BoardBurndown(): React.JSX.Element {
 								</option>
 							))}
 						</select>
+					</div>
+					{/* Set Active control */}
+					<div>
+						<button
+							className="px-2 py-1 border rounded text-sm"
+							disabled={settingActive || selectedSprintId == null || sprints.find(s => s.id === selectedSprintId)?.is_active}
+							aria-busy={settingActive}
+							onClick={async () => {
+								if (selectedSprintId == null) { return; }
+								setSettingActive(true);
+								try {
+									await boardService.updateSprint(id, selectedSprintId, { is_active: true });
+									// reflect in local state
+									setSprints(prev => prev.map(sp => ({ ...sp, is_active: sp.id === selectedSprintId })));
+									const sp = sprints.find(sp => sp.id === selectedSprintId);
+									if (sp) { setActiveSprint({ id: sp.id, start_date: sp.start_date, end_date: sp.end_date }); }
+									showToast("Sprint set active", "success");
+								} catch (e) {
+									showToast(e instanceof Error ? e.message : "Failed to set active sprint", "error");
+								} finally {
+									setSettingActive(false);
+								}
+							}}
+						>
+							{settingActive ? "Setting…" : "Set active"}
+						</button>
 					</div>
 				</div>
 			</div>
